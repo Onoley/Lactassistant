@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import type { StatutProduit } from '@/lib/types'
+import { chargerArgumentsFicheMagasin } from '@/lib/engine/fiche-magasin'
 import { StatutSelect } from './statut-select'
 
 export default async function FicheMagasinPage({ params }: { params: { id: string } }) {
@@ -11,6 +12,9 @@ export default async function FicheMagasinPage({ params }: { params: { id: strin
   const { data: produits } = await supabase.from('produits').select('*').order('nom')
   const { data: statuts } = await supabase.from('statuts_produit_magasin').select('*').eq('magasin_id', magasin.id)
   const statutParProduit = new Map((statuts ?? []).map(s => [s.produit_id, s.statut as StatutProduit]))
+
+  const lignesAvecArguments = await chargerArgumentsFicheMagasin(magasin.id)
+  const argumentsParProduit = new Map(lignesAvecArguments.map(l => [l.produitId, l]))
 
   return (
     <div className="p-6 space-y-4">
@@ -24,16 +28,23 @@ export default async function FicheMagasinPage({ params }: { params: { id: strin
         <thead><tr><th className="text-left">Produit</th><th className="text-left">Statut</th></tr></thead>
         <tbody>
           {(produits ?? []).map(p => (
-            <tr key={p.id}>
-              <td>{p.nom}</td>
-              <td>
-                <StatutSelect
-                  magasinId={magasin.id}
-                  produitId={p.id}
-                  statutActuel={statutParProduit.get(p.id) ?? 'present'}
-                />
-              </td>
-            </tr>
+            <>
+              <tr key={p.id}>
+                <td>{p.nom}</td>
+                <td>
+                  <StatutSelect
+                    magasinId={magasin.id}
+                    produitId={p.id}
+                    statutActuel={statutParProduit.get(p.id) ?? 'present'}
+                  />
+                </td>
+              </tr>
+              {argumentsParProduit.get(p.id)?.arguments.map((arg, i) => (
+                <tr key={`${p.id}-arg-${i}`}>
+                  <td colSpan={2} className="text-sm text-amber-700 pl-4">{arg.message}</td>
+                </tr>
+              ))}
+            </>
           ))}
         </tbody>
       </table>
