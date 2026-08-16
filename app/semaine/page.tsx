@@ -38,7 +38,7 @@ export default async function SemainePage() {
   )
 
   const magasinIdsPlanifies = new Set((visites ?? []).map(v => v.magasin_id))
-  const nonCouvertes = prioritesMagasins.filter(p => !magasinIdsPlanifies.has(p.magasin.id)).slice(0, 10)
+  const nonCouvertes = prioritesMagasins.filter(p => !magasinIdsPlanifies.has(p.magasin.id))
 
   return (
     <div className="p-6 grid grid-cols-2 gap-6">
