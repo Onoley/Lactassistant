@@ -8,17 +8,31 @@ export function UtilisateurForm({ secteurs, managers }: { secteurs: { id: string
   const [role, setRole] = useState<Role>('commercial')
   const [secteurId, setSecteurId] = useState('')
   const [managerId, setManagerId] = useState('')
+  const [error, setError] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    await creerUtilisateur(email, role, secteurId || null, managerId || null)
-    setEmail('')
+    setError('')
+    try {
+      await creerUtilisateur(email, role, secteurId || null, managerId || null)
+      setEmail('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de la création')
+    }
+  }
+
+  function handleRoleChange(newRole: Role) {
+    setRole(newRole)
+    if (newRole !== 'commercial') {
+      setSecteurId('')
+      setManagerId('')
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex gap-2 items-end flex-wrap">
       <input required type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="email" className="border rounded px-2 py-1" />
-      <select value={role} onChange={e => setRole(e.target.value as Role)} className="border rounded px-2 py-1">
+      <select value={role} onChange={e => handleRoleChange(e.target.value as Role)} className="border rounded px-2 py-1">
         <option value="commercial">Commercial</option>
         <option value="manager">Manager</option>
         <option value="admin">Admin</option>
@@ -36,6 +50,7 @@ export function UtilisateurForm({ secteurs, managers }: { secteurs: { id: string
         </>
       )}
       <button type="submit" className="bg-blue-600 text-white px-3 py-1 rounded">Ajouter</button>
+      {error && <div className="w-full text-red-600 text-sm">{error}</div>}
     </form>
   )
 }

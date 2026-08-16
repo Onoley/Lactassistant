@@ -14,6 +14,14 @@ export async function creerUtilisateur(
   const profile = await getCurrentProfile(supabase)
   if (profile?.role !== 'admin') throw new Error('Réservé aux administrateurs')
 
+  if (role === 'commercial') {
+    if (!secteurId) throw new Error('Le secteur est obligatoire pour un commercial')
+    if (!managerId) throw new Error('Le manager est obligatoire pour un commercial')
+  } else {
+    if (secteurId) throw new Error('Un ' + role + ' ne doit pas avoir de secteur')
+    if (managerId) throw new Error('Un ' + role + ' ne doit pas avoir de manager')
+  }
+
   const admin = createAdminClient()
   const { error } = await admin.from('profiles').insert({
     email, role, secteur_id: secteurId, manager_id: managerId,
