@@ -186,7 +186,8 @@ create policy "visites_write_own" on visites for insert
   with check (
     (select role from current_profile()) = 'admin'
     or (
-      commercial_id = (select id from current_profile())
+      (select role from current_profile()) = 'commercial'
+      and commercial_id = (select id from current_profile())
       and magasin_id in (select id from magasins where secteur_id = (select secteur_id from current_profile()))
     )
   );
@@ -194,7 +195,8 @@ create policy "visites_update_own" on visites for update
   using (
     (select role from current_profile()) = 'admin'
     or (
-      commercial_id = (select id from current_profile())
+      (select role from current_profile()) = 'commercial'
+      and commercial_id = (select id from current_profile())
       and magasin_id in (select id from magasins where secteur_id = (select secteur_id from current_profile()))
     )
   );
@@ -202,7 +204,8 @@ create policy "visites_delete_own" on visites for delete
   using (
     (select role from current_profile()) = 'admin'
     or (
-      commercial_id = (select id from current_profile())
+      (select role from current_profile()) = 'commercial'
+      and commercial_id = (select id from current_profile())
       and magasin_id in (select id from magasins where secteur_id = (select secteur_id from current_profile()))
     )
   );
