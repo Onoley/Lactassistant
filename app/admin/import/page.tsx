@@ -5,11 +5,15 @@ import { importMagasins, importProduits, importPromos, type ImportSummary } from
 function ImportForm({ label, action }: { label: string; action: (formData: FormData) => Promise<ImportSummary> }) {
   const [summary, setSummary] = useState<ImportSummary | null>(null)
   const [pending, setPending] = useState(false)
+  const [erreur, setErreur] = useState<string | null>(null)
 
   async function handleSubmit(formData: FormData) {
     setPending(true)
+    setErreur(null)
     try {
       setSummary(await action(formData))
+    } catch (err) {
+      setErreur((err as Error).message)
     } finally {
       setPending(false)
     }
@@ -22,6 +26,7 @@ function ImportForm({ label, action }: { label: string; action: (formData: FormD
       <button type="submit" disabled={pending} className="bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-50">
         {pending ? 'Import en cours...' : 'Importer'}
       </button>
+      {erreur && <p className="text-red-600 text-sm">{erreur}</p>}
       {summary && (
         <div>
           <p>{summary.imported} ligne(s) importée(s).</p>
