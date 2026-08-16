@@ -85,7 +85,7 @@ create table visites (
 create or replace function public.current_profile()
 returns profiles as $$
   select * from profiles where user_id = auth.uid();
-$$ language sql stable security definer;
+$$ language sql stable security definer set search_path = public;
 
 create or replace function public.visible_secteurs()
 returns setof uuid as $$
@@ -99,7 +99,7 @@ returns setof uuid as $$
       (select role from current_profile()) = 'commercial'
       and id = (select secteur_id from current_profile())
     );
-$$ language sql stable security definer;
+$$ language sql stable security definer set search_path = public;
 
 -- Lie automatiquement un profil pré-créé par l'admin au compte auth.users
 -- créé au premier login (appariement par email).
@@ -110,7 +110,7 @@ begin
   where email = new.email and user_id is null;
   return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = public;
 
 create trigger on_auth_user_created
   after insert on auth.users
@@ -170,12 +170,12 @@ create policy "statuts_select_visible" on statuts_produit_magasin for select
   using (magasin_id in (select id from magasins where secteur_id in (select visible_secteurs())));
 create policy "statuts_write_own_secteur" on statuts_produit_magasin for insert
   with check (
-    magasin_id in (select id from magasins where secteur_id = (select secteur_id from current_profile()))
+    ((select role from current_profile()) = 'commercial' and magasin_id in (select id from magasins where secteur_id = (select secteur_id from current_profile())))
     or (select role from current_profile()) = 'admin'
   );
 create policy "statuts_update_own_secteur" on statuts_produit_magasin for update
   using (
-    magasin_id in (select id from magasins where secteur_id = (select secteur_id from current_profile()))
+    ((select role from current_profile()) = 'commercial' and magasin_id in (select id from magasins where secteur_id = (select secteur_id from current_profile())))
     or (select role from current_profile()) = 'admin'
   );
 
@@ -183,8 +183,26 @@ create policy "statuts_update_own_secteur" on statuts_produit_magasin for update
 create policy "visites_select_visible" on visites for select
   using (magasin_id in (select id from magasins where secteur_id in (select visible_secteurs())));
 create policy "visites_write_own" on visites for insert
-  with check (commercial_id = (select id from current_profile()));
+  with check (
+    (select role from current_profile()) = 'admin'
+    or (
+      commercial_id = (select id from current_profile())
+      and magasin_id in (select id from magasins where secteur_id = (select secteur_id from current_profile()))
+    )
+  );
 create policy "visites_update_own" on visites for update
-  using (commercial_id = (select id from current_profile()));
+  using (
+    (select role from current_profile()) = 'admin'
+    or (
+      commercial_id = (select id from current_profile())
+      and magasin_id in (select id from magasins where secteur_id = (select secteur_id from current_profile()))
+    )
+  );
 create policy "visites_delete_own" on visites for delete
-  using (commercial_id = (select id from current_profile()));
+  using (
+    (select role from current_profile()) = 'admin'
+    or (
+      commercial_id = (select id from current_profile())
+      and magasin_id in (select id from magasins where secteur_id = (select secteur_id from current_profile()))
+    )
+  );
