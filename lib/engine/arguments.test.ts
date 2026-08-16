@@ -50,6 +50,6 @@ describe('genererArguments', () => {
       date_constat: '2026-08-17'
     }
     const { score } = genererArguments(cible, produit, 20, [cible], new Map(), [promoWithPastInstButImminentConstat], 'les_deux')
-    expect(score).toBeGreaterThan(100)
+    expect(score).toBe(200)
   })
 })
