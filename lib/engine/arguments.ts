@@ -14,7 +14,8 @@ export function genererArguments(
   tousLesMagasins: Magasin[],
   statutsParMagasin: Map<string, StatutProduit>,
   promosDuProduit: Promo[],
-  critere: CritereSimilarite
+  critere: CritereSimilarite,
+  aujourdHui?: Date
 ): { arguments: Argument[]; score: number } {
   const args: Argument[] = []
   const similaires = magasinsSimilaires(magasin, tousLesMagasins, critere)
@@ -37,7 +38,7 @@ export function genererArguments(
   }
 
   const score = promosScoped.length > 0
-    ? Math.max(...promosScoped.map(p => scoreRangProduit(rang) + scoreUrgencePromoJalons([p.date_installation, p.date_debut_vente, p.date_constat])))
+    ? Math.max(...promosScoped.map(p => scoreRangProduit(rang) + scoreUrgencePromoJalons([p.date_installation, p.date_debut_vente, p.date_constat], aujourdHui)))
     : scoreRangProduit(rang)
 
   return { arguments: args, score }

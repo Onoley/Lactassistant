@@ -12,7 +12,8 @@ export function calculerPrioritesMagasins(
   statuts: StatutProduitMagasin[],
   produitsParId: Map<string, Produit>,
   prioritesParProduitId: Map<string, PrioriteProduit>,
-  promosParProduitId: Map<string, Promo[]>
+  promosParProduitId: Map<string, Promo[]>,
+  aujourdHui?: Date
 ): PrioriteMagasin[] {
   const statutsParMagasin = new Map<string, StatutProduitMagasin[]>()
   for (const s of statuts) {
@@ -34,7 +35,7 @@ export function calculerPrioritesMagasins(
         const promosRaw = promosParProduitId.get(statut.produit_id) ?? []
         const promos = promosRaw.filter(p => p.enseigne === magasin.enseigne)
         const scoreProduit = promos.length > 0
-          ? Math.max(...promos.map(p => scoreRangProduit(priorite.rang) + scoreUrgencePromoJalons([p.date_installation, p.date_debut_vente, p.date_constat])))
+          ? Math.max(...promos.map(p => scoreRangProduit(priorite.rang) + scoreUrgencePromoJalons([p.date_installation, p.date_debut_vente, p.date_constat], aujourdHui)))
           : scoreRangProduit(priorite.rang)
         if (scoreProduit > score) score = scoreProduit
         if (produit) raisons.push(`${produit.nom} (${statut.statut})`)

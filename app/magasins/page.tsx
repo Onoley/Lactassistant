@@ -1,8 +1,13 @@
 import Link from 'next/link'
-import { createServerClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
 
 export default async function MagasinsPage() {
   const supabase = createServerClient()
+  const profile = await getCurrentProfile(supabase)
+  if (!profile) redirect('/login')
+  if (profile.role !== 'commercial') redirect('/equipe')
+
   const { data: magasins } = await supabase.from('magasins').select('*').order('nom')
 
   return (

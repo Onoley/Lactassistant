@@ -1,5 +1,6 @@
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
 import { calculerPrioritesMagasins } from '@/lib/engine/priorites'
+import type { Promo } from '@/lib/types'
 
 export default async function EquipePage() {
   const supabase = createServerClient()
@@ -22,10 +23,10 @@ export default async function EquipePage() {
 
   const produitsParId = new Map((produits ?? []).map(p => [p.id, p]))
   const prioritesParProduitId = new Map((priorites ?? []).map(p => [p.produit_id, p]))
-  const promosParProduitId = new Map<string, any[]>()
+  const promosParProduitId = new Map<string, Promo[]>()
   for (const lien of promoLiens ?? []) {
     const liste = promosParProduitId.get(lien.produit_id) ?? []
-    liste.push(lien.promos)
+    liste.push(lien.promos as unknown as Promo)
     promosParProduitId.set(lien.produit_id, liste)
   }
 

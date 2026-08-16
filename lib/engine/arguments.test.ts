@@ -49,7 +49,7 @@ describe('genererArguments', () => {
       date_debut_vente: '2026-08-05',
       date_constat: '2026-08-17'
     }
-    const { score } = genererArguments(cible, produit, 20, [cible], new Map(), [promoWithPastInstButImminentConstat], 'les_deux')
+    const { score } = genererArguments(cible, produit, 20, [cible], new Map(), [promoWithPastInstButImminentConstat], 'les_deux', new Date('2026-08-16'))
     expect(score).toBe(200)
   })
 })

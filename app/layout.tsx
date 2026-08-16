@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Link from "next/link";
 import "./globals.css";
 import { createServerClient, getCurrentProfile } from "@/lib/supabase/server";
 import { SignOutButton } from "./sign-out-button";
@@ -36,15 +37,15 @@ export default async function RootLayout({
           <nav className="flex gap-4 border-b p-4 items-center">
             {profile.role === "commercial" && (
               <>
-                <a href="/semaine">Ma semaine</a>
-                <a href="/magasins">Mes magasins</a>
+                <Link href="/semaine">Ma semaine</Link>
+                <Link href="/magasins">Mes magasins</Link>
               </>
             )}
-            {profile.role === "manager" && <a href="/equipe">Mon équipe</a>}
+            {profile.role === "manager" && <Link href="/equipe">Mon équipe</Link>}
             {profile.role === "admin" && (
               <>
-                <a href="/admin/import">Import</a>
-                <a href="/admin/utilisateurs">Utilisateurs</a>
+                <Link href="/admin/import">Import</Link>
+                <Link href="/admin/utilisateurs">Utilisateurs</Link>
               </>
             )}
             <span className="ml-auto text-sm text-gray-500">{profile.email}</span>

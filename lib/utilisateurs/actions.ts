@@ -24,7 +24,7 @@ export async function creerUtilisateur(
 
   const admin = createAdminClient()
   const { error } = await admin.from('profiles').insert({
-    email, role, secteur_id: secteurId, manager_id: managerId,
+    email: email.toLowerCase(), role, secteur_id: secteurId, manager_id: managerId,
   })
   if (error) throw error
   revalidatePath('/admin/utilisateurs')

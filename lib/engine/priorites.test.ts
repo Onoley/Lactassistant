@@ -88,9 +88,9 @@ describe('calculerPrioritesMagasins', () => {
     }
     const promosParProduitId = new Map<string, Promo[]>([['p1', [promoWithPastInstallButImminentConstat]]])
 
-    const result = calculerPrioritesMagasins(magasins, statuts, produits, priorites, promosParProduitId)
+    const result = calculerPrioritesMagasins(magasins, statuts, produits, priorites, promosParProduitId, new Date('2026-08-16'))
 
     expect(result).toHaveLength(1)
-    expect(result[0].score).toBeGreaterThan(100)
+    expect(result[0].score).toBe(200)
   })
 })

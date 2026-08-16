@@ -107,7 +107,7 @@ create or replace function public.handle_new_auth_user()
 returns trigger as $$
 begin
   update public.profiles set user_id = new.id
-  where email = new.email and user_id is null;
+  where lower(email) = lower(new.email) and user_id is null;
   return new;
 end;
 $$ language plpgsql security definer set search_path = public;

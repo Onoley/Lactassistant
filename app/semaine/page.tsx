@@ -1,12 +1,15 @@
+import { redirect } from 'next/navigation'
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
 import { calculerPrioritesMagasins } from '@/lib/engine/priorites'
 import { numeroSemaineCourante } from '@/lib/semaine'
 import { CalendrierSemaine } from './calendrier-semaine'
+import type { Promo } from '@/lib/types'
 
 export default async function SemainePage() {
   const supabase = createServerClient()
   const profile = await getCurrentProfile(supabase)
-  if (!profile) return null
+  if (!profile) redirect('/login')
+  if (profile.role !== 'commercial') redirect('/equipe')
 
   const semaine = numeroSemaineCourante()
 
@@ -26,10 +29,10 @@ export default async function SemainePage() {
 
   const produitsParId = new Map((produits ?? []).map(p => [p.id, p]))
   const prioritesParProduitId = new Map((priorites ?? []).map(p => [p.produit_id, p]))
-  const promosParProduitId = new Map<string, any[]>()
+  const promosParProduitId = new Map<string, Promo[]>()
   for (const lien of promoLiens ?? []) {
     const liste = promosParProduitId.get(lien.produit_id) ?? []
-    liste.push(lien.promos)
+    liste.push(lien.promos as unknown as Promo)
     promosParProduitId.set(lien.produit_id, liste)
   }
 

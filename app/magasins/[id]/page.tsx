@@ -1,12 +1,18 @@
-import { notFound } from 'next/navigation'
-import { createServerClient } from '@/lib/supabase/server'
+import { Fragment } from 'react'
+import { notFound, redirect } from 'next/navigation'
+import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
 import type { StatutProduit } from '@/lib/types'
 import { chargerArgumentsFicheMagasin } from '@/lib/engine/fiche-magasin'
 import { StatutSelect } from './statut-select'
 
-export default async function FicheMagasinPage({ params }: { params: { id: string } }) {
+export default async function FicheMagasinPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const supabase = createServerClient()
-  const { data: magasin } = await supabase.from('magasins').select('*').eq('id', params.id).single()
+  const profile = await getCurrentProfile(supabase)
+  if (!profile) redirect('/login')
+  if (profile.role !== 'commercial') redirect('/equipe')
+
+  const { data: magasin } = await supabase.from('magasins').select('*').eq('id', id).single()
   if (!magasin) notFound()
 
   const { data: produits } = await supabase.from('produits').select('*').order('nom')
@@ -28,8 +34,8 @@ export default async function FicheMagasinPage({ params }: { params: { id: strin
         <thead><tr><th className="text-left">Produit</th><th className="text-left">Statut</th></tr></thead>
         <tbody>
           {(produits ?? []).map(p => (
-            <>
-              <tr key={p.id}>
+            <Fragment key={p.id}>
+              <tr>
                 <td>{p.nom}</td>
                 <td>
                   <StatutSelect
@@ -44,7 +50,7 @@ export default async function FicheMagasinPage({ params }: { params: { id: strin
                   <td colSpan={2} className="text-sm text-amber-700 pl-4">{arg.message}</td>
                 </tr>
               ))}
-            </>
+            </Fragment>
           ))}
         </tbody>
       </table>
