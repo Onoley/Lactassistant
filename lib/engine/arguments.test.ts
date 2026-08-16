@@ -37,4 +37,19 @@ describe('genererArguments', () => {
     const { score } = genererArguments(cibleCarrefour, produit, 20, [cibleCarrefour], new Map(), [promoLeclerc], 'les_deux')
     expect(score).toBe(100)
   })
+
+  it('score élevé si date_constat est imminente même si date_installation est passée', () => {
+    const cible = magasin('1', { enseigne: 'Carrefour' })
+    const promoWithPastInstButImminentConstat: Promo = {
+      id: 'pr1',
+      code: 'PR1',
+      enseigne: 'Carrefour',
+      mecanique: '-20%',
+      date_installation: '2026-08-01',
+      date_debut_vente: '2026-08-05',
+      date_constat: '2026-08-17'
+    }
+    const { score } = genererArguments(cible, produit, 20, [cible], new Map(), [promoWithPastInstButImminentConstat], 'les_deux')
+    expect(score).toBeGreaterThan(100)
+  })
 })

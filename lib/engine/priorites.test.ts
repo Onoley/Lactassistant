@@ -27,20 +27,30 @@ describe('calculerPrioritesMagasins', () => {
     const mag1 = magasin('1', { enseigne: 'Carrefour' })
     const mag2 = magasin('2', { enseigne: 'Carrefour' })
     const magasins = [mag1, mag2]
-    const produits = new Map<string, Produit>([['p1', { id: 'p1', code: 'P1', nom: 'Yaourt', categorie: null }]])
-    const priorites = new Map<string, PrioriteProduit>([['p1', { produit_id: 'p1', rang: 20 }]])
+    const produits = new Map<string, Produit>([
+      ['p1', { id: 'p1', code: 'P1', nom: 'Yaourt', categorie: null }],
+      ['p2', { id: 'p2', code: 'P2', nom: 'Fromage', categorie: null }],
+    ])
+    const priorites = new Map<string, PrioriteProduit>([
+      ['p1', { produit_id: 'p1', rang: 20 }],
+      ['p2', { produit_id: 'p2', rang: 50 }],
+    ])
     const statuts: StatutProduitMagasin[] = [
       { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
-      { magasin_id: '2', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
+      { magasin_id: '2', produit_id: 'p2', statut: 'manquant', signale_par: null, signale_at: '' },
     ]
-    const promo1: Promo = { id: 'pr1', code: 'PR1', enseigne: 'Carrefour', mecanique: '-20%', date_installation: '2026-08-18', date_debut_vente: '2026-08-20', date_constat: '2026-08-25' }
-    const promosParProduitId = new Map<string, Promo[]>([['p1', [promo1]]])
+    const promo: Promo = { id: 'pr1', code: 'PR1', enseigne: 'Carrefour', mecanique: '-20%', date_installation: '2026-08-18', date_debut_vente: '2026-08-20', date_constat: '2026-08-25' }
+    const promosParProduitId = new Map<string, Promo[]>([
+      ['p1', [promo]],
+      ['p2', [promo]],
+    ])
 
     const result = calculerPrioritesMagasins(magasins, statuts, produits, priorites, promosParProduitId)
 
     expect(result).toHaveLength(2)
-    expect(result[0].score).toBeGreaterThan(100)
-    expect(result[1].score).toBeGreaterThan(100)
+    expect(result[0].magasin.id).toBe('1')
+    expect(result[1].magasin.id).toBe('2')
+    expect(result[0].score).toBeGreaterThan(result[1].score)
   })
 
   it("ignore les promos d'une autre enseigne", () => {
