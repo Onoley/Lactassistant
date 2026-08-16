@@ -40,7 +40,7 @@ export async function chargerArgumentsFicheMagasin(
     .from('statuts_produit_magasin')
     .select('*')
     .in('produit_id', manquants.map(p => p.id))
-  const { data: promoLiens } = await admin
+  const { data: promoLiens } = await supabase
     .from('promo_produits')
     .select('produit_id, promos(*)')
     .in('produit_id', manquants.map(p => p.id))
