@@ -30,4 +30,11 @@ describe('genererArguments', () => {
     const { score } = genererArguments(cible, produit, 20, [cible], new Map(), [], 'les_deux')
     expect(score).toBe(100)
   })
+
+  it("ignore les promos d'une autre enseigne", () => {
+    const cibleCarrefour = magasin('1', { enseigne: 'Carrefour' })
+    const promoLeclerc: Promo = { id: 'pr1', code: 'PR1', enseigne: 'Leclerc', mecanique: '-20%', date_installation: '2026-08-18', date_debut_vente: '2026-08-20', date_constat: '2026-08-25' }
+    const { score } = genererArguments(cibleCarrefour, produit, 20, [cibleCarrefour], new Map(), [promoLeclerc], 'les_deux')
+    expect(score).toBe(100)
+  })
 })

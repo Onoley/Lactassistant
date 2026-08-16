@@ -1,5 +1,5 @@
 import type { Magasin, Produit, PrioriteProduit, Promo, StatutProduitMagasin } from '@/lib/types'
-import { scoreRangProduit, scorePriorite } from './scoring'
+import { scoreRangProduit, scoreUrgencePromoJalons } from './scoring'
 
 export interface PrioriteMagasin {
   magasin: Magasin
@@ -31,9 +31,10 @@ export function calculerPrioritesMagasins(
         const priorite = prioritesParProduitId.get(statut.produit_id)
         if (!priorite) continue
         const produit = produitsParId.get(statut.produit_id)
-        const promos = promosParProduitId.get(statut.produit_id) ?? []
+        const promosRaw = promosParProduitId.get(statut.produit_id) ?? []
+        const promos = promosRaw.filter(p => p.enseigne === magasin.enseigne)
         const scoreProduit = promos.length > 0
-          ? Math.max(...promos.map(p => scorePriorite(priorite.rang, [p.date_installation, p.date_debut_vente, p.date_constat].sort()[0])))
+          ? Math.max(...promos.map(p => scoreRangProduit(priorite.rang) + scoreUrgencePromoJalons([p.date_installation, p.date_debut_vente, p.date_constat])))
           : scoreRangProduit(priorite.rang)
         if (scoreProduit > score) score = scoreProduit
         if (produit) raisons.push(`${produit.nom} (${statut.statut})`)

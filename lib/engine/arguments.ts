@@ -1,6 +1,6 @@
 import type { Magasin, Produit, Promo, StatutProduit } from '@/lib/types'
 import { magasinsSimilaires, type CritereSimilarite } from './similarity'
-import { scoreRangProduit, scorePriorite, type Rang } from './scoring'
+import { scoreRangProduit, scoreUrgencePromoJalons, type Rang } from './scoring'
 
 export interface Argument {
   type: 'magasins_similaires' | 'promo'
@@ -27,15 +27,17 @@ export function genererArguments(
     })
   }
 
-  for (const promo of promosDuProduit) {
+  const promosScoped = promosDuProduit.filter(p => p.enseigne === magasin.enseigne)
+
+  for (const promo of promosScoped) {
     args.push({
       type: 'promo',
       message: `Promo "${promo.mecanique}" chez ${promo.enseigne} : installation le ${promo.date_installation}, vente le ${promo.date_debut_vente}.`,
     })
   }
 
-  const score = promosDuProduit.length > 0
-    ? Math.max(...promosDuProduit.map(p => scorePriorite(rang, [p.date_installation, p.date_debut_vente, p.date_constat].sort()[0])))
+  const score = promosScoped.length > 0
+    ? Math.max(...promosScoped.map(p => scoreRangProduit(rang) + scoreUrgencePromoJalons([p.date_installation, p.date_debut_vente, p.date_constat])))
     : scoreRangProduit(rang)
 
   return { arguments: args, score }
