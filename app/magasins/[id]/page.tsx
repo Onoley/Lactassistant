@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
 import type { StatutProduit } from '@/lib/types'
+import { StatutSelect } from './statut-select'
 
 export default async function FicheMagasinPage({ params }: { params: { id: string } }) {
   const supabase = createServerClient()
@@ -25,7 +26,13 @@ export default async function FicheMagasinPage({ params }: { params: { id: strin
           {(produits ?? []).map(p => (
             <tr key={p.id}>
               <td>{p.nom}</td>
-              <td>{statutParProduit.get(p.id) ?? 'present'}</td>
+              <td>
+                <StatutSelect
+                  magasinId={magasin.id}
+                  produitId={p.id}
+                  statutActuel={statutParProduit.get(p.id) ?? 'present'}
+                />
+              </td>
             </tr>
           ))}
         </tbody>
