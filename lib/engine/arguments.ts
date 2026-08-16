@@ -31,9 +31,10 @@ export function genererArguments(
   const promosScoped = promosDuProduit.filter(p => p.enseigne === magasin.enseigne)
 
   for (const promo of promosScoped) {
+    const installation = promo.date_installation ? `installation le ${promo.date_installation}, ` : ''
     args.push({
       type: 'promo',
-      message: `Promo "${promo.mecanique}" chez ${promo.enseigne} : installation le ${promo.date_installation}, vente le ${promo.date_debut_vente}.`,
+      message: `Promo "${promo.mecanique}" chez ${promo.enseigne} : ${installation}vente le ${promo.date_debut_vente}.`,
     })
   }
 

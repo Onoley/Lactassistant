@@ -20,6 +20,8 @@ export function scorePriorite(rang: Rang, dateProchainJalonIso: string, aujourdH
   return scoreRangProduit(rang) + scoreUrgenceDate(dateProchainJalonIso, aujourdHui)
 }
 
-export function scoreUrgencePromoJalons(dates: string[], aujourdHui?: Date): number {
-  return Math.max(...dates.map(d => scoreUrgenceDate(d, aujourdHui)))
+export function scoreUrgencePromoJalons(dates: Array<string | null | undefined>, aujourdHui?: Date): number {
+  const connues = dates.filter((d): d is string => Boolean(d))
+  if (connues.length === 0) return 0
+  return Math.max(...connues.map(d => scoreUrgenceDate(d, aujourdHui)))
 }

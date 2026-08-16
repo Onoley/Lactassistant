@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { genererArguments } from './arguments'
+import { scoreRangProduit } from './scoring'
 import type { Magasin, Produit, Promo, StatutProduit } from '@/lib/types'
 
 function magasin(id: string, overrides: Partial<Magasin> = {}): Magasin {
@@ -51,5 +52,17 @@ describe('genererArguments', () => {
     }
     const { score } = genererArguments(cible, produit, 20, [cible], new Map(), [promoWithPastInstButImminentConstat], 'les_deux', new Date('2026-08-16'))
     expect(score).toBe(200)
+  })
+
+  it('gère une promo sans date_installation ni date_constat connues (import réel incomplet)', () => {
+    const cible = magasin('1', { enseigne: 'Carrefour' })
+    const promoSansJalonsOptionnels: Promo = {
+      id: 'pr1', code: 'PR1', enseigne: 'Carrefour', mecanique: '-20%',
+      date_installation: null, date_debut_vente: '2026-08-20', date_constat: null,
+    }
+    const { arguments: args, score } = genererArguments(cible, produit, 20, [cible], new Map(), [promoSansJalonsOptionnels], 'les_deux', new Date('2026-08-16'))
+    expect(args[0].message).not.toContain('null')
+    expect(args[0].message).toContain('vente le 2026-08-20')
+    expect(score).toBe(scoreRangProduit(20) + 100)
   })
 })

@@ -39,9 +39,16 @@ export interface Promo {
   code: string
   enseigne: string
   mecanique: string
-  date_installation: string
+  date_installation: string | null
   date_debut_vente: string
-  date_constat: string
+  date_constat: string | null
+  date_fin_vente?: string | null
+  revente_fin?: string | null
+  theme?: string | null
+  support_op?: string | null
+  statut?: string | null
+  op_trade?: string | null
+  niveau_operation?: string | null
 }
 
 export type StatutProduit = 'present' | 'manquant' | 'rupture'
