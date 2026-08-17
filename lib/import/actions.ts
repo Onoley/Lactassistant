@@ -2,7 +2,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
 import { readSpreadsheet, parseRows, type ImportError } from './parser'
-import { mapMagasinRow, mapProduitRow, mapPromoRow } from './mappers'
+import { mapMagasinRow, mapProduitRow, mapPromoRows } from './mappers'
 
 export interface ImportSummary {
   imported: number
@@ -100,13 +100,16 @@ export async function importProduits(formData: FormData): Promise<ImportSummary>
 
 export async function importPromos(formData: FormData): Promise<ImportSummary> {
   await assertAdmin()
+  const enseigne = (formData.get('enseigne') as string)?.trim()
+  if (!enseigne) throw new Error('L\'enseigne est obligatoire pour importer un plan promotionnel')
+
   const file = formData.get('file') as File
   const rows = readSpreadsheet(await file.arrayBuffer())
-  const { valid, errors } = parseRows(rows, mapPromoRow)
+  const { valid, errors } = mapPromoRows(rows, enseigne)
 
   const { deduped, duplicates } = dedupeByCode(valid)
   duplicates.forEach(code => {
-    errors.push({ row: 0, message: `Code "${code}" apparaît plusieurs fois dans le fichier, seule la dernière occurrence a été importée` })
+    errors.push({ row: 0, message: `Code "${code}" apparaît plusieurs fois, seule la dernière occurrence a été importée` })
   })
 
   const admin = createAdminClient()
@@ -117,9 +120,15 @@ export async function importPromos(formData: FormData): Promise<ImportSummary> {
         code: p.code,
         enseigne: p.enseigne,
         mecanique: p.mecanique,
+        theme: p.theme,
+        support_op: p.supportOp,
+        statut: p.statut,
+        op_trade: p.opTrade,
+        niveau_operation: p.niveauOperation,
         date_installation: p.dateInstallation,
+        revente_fin: p.reventeFin,
         date_debut_vente: p.dateDebutVente,
-        date_constat: p.dateConstat,
+        date_fin_vente: p.dateFinVente,
       })),
       { onConflict: 'code' }
     )
@@ -130,15 +139,16 @@ export async function importPromos(formData: FormData): Promise<ImportSummary> {
   const produitIdByCode = new Map((produits ?? []).map(p => [p.code, p.id]))
   const promoIdByCode = new Map((promos ?? []).map(p => [p.code, p.id]))
 
-  const links: Array<{ promo_id: string; produit_id: string }> = []
+  const links: Array<{ promo_id: string; produit_id: string; libelle_produit: string | null; ca_nego: number | null; ca_real: number | null }> = []
   deduped.forEach(p => {
     const promoId = promoIdByCode.get(p.code)
-    p.produitsCodes.forEach(code => {
-      const produitId = produitIdByCode.get(code)
+    if (!promoId) return
+    p.produits.forEach(prod => {
+      const produitId = produitIdByCode.get(prod.ean)
       if (produitId) {
-        links.push({ promo_id: promoId, produit_id: produitId })
+        links.push({ promo_id: promoId, produit_id: produitId, libelle_produit: prod.libelle, ca_nego: prod.caNego, ca_real: prod.caReal })
       } else {
-        errors.push({ row: 0, message: `Promo ${p.code} : produit "${code}" introuvable` })
+        errors.push({ row: 0, message: `Promo ${p.code} : produit EAN "${prod.ean}" introuvable dans le catalogue${prod.libelle ? ` (${prod.libelle})` : ''} — ajoute-le d'abord dans /admin/produits` })
       }
     })
   })

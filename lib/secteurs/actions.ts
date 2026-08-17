@@ -17,6 +17,14 @@ export async function creerSecteur(nom: string) {
   revalidatePath('/admin/secteurs')
 }
 
+export async function modifierSecteur(id: string, nom: string) {
+  await assertAdmin()
+  const admin = createAdminClient()
+  const { error } = await admin.from('secteurs').update({ nom }).eq('id', id)
+  if (error) throw error
+  revalidatePath('/admin/secteurs')
+}
+
 export async function supprimerSecteur(id: string) {
   await assertAdmin()
   const admin = createAdminClient()

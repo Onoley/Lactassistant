@@ -1,3 +1,5 @@
+import type { ImportError, ParseResult } from './parser'
+
 export interface MagasinImport {
   code: string
   nom: string
@@ -51,14 +53,27 @@ export interface ProduitImport {
   rang: 20 | 50 | 70
 }
 
+export interface PromoProduitImport {
+  ean: string
+  libelle: string | null
+  caNego: number | null
+  caReal: number | null
+}
+
 export interface PromoImport {
   code: string
   enseigne: string
   mecanique: string
-  dateInstallation: string
+  theme: string | null
+  supportOp: string | null
+  statut: string | null
+  opTrade: string | null
+  niveauOperation: string | null
+  dateInstallation: string | null
+  reventeFin: string | null
   dateDebutVente: string
-  dateConstat: string
-  produitsCodes: string[]
+  dateFinVente: string | null
+  produits: PromoProduitImport[]
 }
 
 function requireField(row: Record<string, string>, field: string): string {
@@ -114,14 +129,108 @@ export function mapProduitRow(row: Record<string, string>): ProduitImport {
   return { code, nom, categorie: row.categorie?.trim() || null, rang: rang as 20 | 50 | 70 }
 }
 
-export function mapPromoRow(row: Record<string, string>): PromoImport {
-  return {
-    code: requireField(row, 'code'),
-    enseigne: requireField(row, 'enseigne'),
-    mecanique: requireField(row, 'mecanique'),
-    dateInstallation: requireDate(row, 'date_installation'),
-    dateDebutVente: requireDate(row, 'date_debut_vente'),
-    dateConstat: requireDate(row, 'date_constat'),
-    produitsCodes: requireField(row, 'produits_codes').split(';').map(c => c.trim()).filter(Boolean),
-  }
+function parseDateFr(value: string | undefined): string | null {
+  const v = value?.trim()
+  if (!v) return null
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(v)
+  if (!m) return null
+  const [, jour, mois, annee] = m
+  return `${annee}-${mois}-${jour}`
+}
+
+function parseNombreFr(value: string | undefined): number | null {
+  const v = value?.trim().replace(',', '.')
+  if (!v) return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+function slug(s: string): string {
+  return s
+    .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toUpperCase()
+}
+
+// Lit l'export "PPE" (plan promotionnel d'une enseigne) tel que fourni par
+// l'outil interne : une ligne = une opération, avec plusieurs produits listés
+// dans une même cellule (un par ligne texte, EAN/libellé/mécanique/CA alignés
+// par position). Une opération qui mélange plusieurs mécaniques (ex. "3 pour
+// 2" pour une moitié des produits, "2ème à 50%" pour l'autre) est éclatée en
+// plusieurs promos distinctes, une par mécanique, car promos.mecanique est un
+// champ unique par ligne. L'enseigne n'est pas une colonne du fichier (un
+// fichier = une enseigne) : elle est saisie une fois dans le formulaire.
+export function mapPromoRows(rows: Record<string, string>[], enseigne: string): ParseResult<PromoImport> {
+  const valid: PromoImport[] = []
+  const errors: ImportError[] = []
+  const codesUtilises = new Map<string, number>()
+  const prefixe = slug(enseigne).slice(0, 4) || 'ENS'
+  const suffixes = 'ABCDEFGH'
+
+  rows.forEach((row, index) => {
+    try {
+      const eans = requireField(row, 'EAN').split('\n').map(s => s.trim())
+      const libelles = requireField(row, 'Libellé produit').split('\n').map(s => s.trim())
+      const offres = (row['Offre conso'] ?? '').split('\n').map(s => s.trim())
+      const caNegos = (row['CA Négo'] ?? '').split('\n').map(s => s.trim())
+      const caReals = (row['CA Réal'] ?? '').split('\n').map(s => s.trim())
+
+      if (eans.length !== libelles.length) {
+        throw new Error(`${eans.length} EAN pour ${libelles.length} libellés produit — colonnes désalignées`)
+      }
+      while (offres.length < eans.length) offres.push('')
+      while (caNegos.length < eans.length) caNegos.push('')
+      while (caReals.length < eans.length) caReals.push('')
+
+      const consoDebut = parseDateFr(requireField(row, 'Conso déb.'))
+      if (!consoDebut) throw new Error(`Champ "Conso déb." doit être au format JJ/MM/AAAA, reçu "${row['Conso déb.']}"`)
+
+      const theme = row['Thème']?.trim() || null
+
+      // regroupe les produits par mécanique distincte au sein de l'opération
+      const groupes = new Map<string, number[]>()
+      offres.forEach((mecanique, i) => {
+        const liste = groupes.get(mecanique) ?? []
+        liste.push(i)
+        groupes.set(mecanique, liste)
+      })
+
+      const themeSlug = theme ? slug(theme) : `L${index}`
+      let g = 0
+      for (const [mecanique, indices] of groupes) {
+        const base = `${prefixe}-${themeSlug}`
+        let code = groupes.size === 1 ? base : `${base}-${suffixes[g] ?? String(g)}`
+        const dejaVu = codesUtilises.get(code) ?? 0
+        if (dejaVu > 0) code = `${code}-${dejaVu + 1}`
+        codesUtilises.set(code, dejaVu + 1)
+        g++
+
+        valid.push({
+          code,
+          enseigne,
+          mecanique,
+          theme,
+          supportOp: row['Support OP']?.trim() || null,
+          statut: row['Statut']?.trim() || null,
+          opTrade: row['OP Trade']?.trim() || null,
+          niveauOperation: row['Niveau opération']?.trim() || null,
+          dateInstallation: parseDateFr(row['Revente déb.']),
+          reventeFin: parseDateFr(row['Revente fin']),
+          dateDebutVente: consoDebut,
+          dateFinVente: parseDateFr(row['Conso fin']),
+          produits: indices.map(i => ({
+            ean: eans[i],
+            libelle: libelles[i] || null,
+            caNego: parseNombreFr(caNegos[i]),
+            caReal: parseNombreFr(caReals[i]),
+          })),
+        })
+      }
+    } catch (err) {
+      errors.push({ row: index + 2, message: (err as Error).message })
+    }
+  })
+
+  return { valid, errors }
 }

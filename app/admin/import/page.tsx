@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { importMagasins, importProduits, importPromos, type ImportSummary } from '@/lib/import/actions'
+import { ENSEIGNES } from '@/lib/types'
 
 function ImportForm({
   label,
@@ -64,7 +65,12 @@ export default function ImportPage() {
         />
       </ImportForm>
       <ImportForm label="Produits et priorités" action={importProduits} />
-      <ImportForm label="Promos catalogue" action={importPromos} />
+      <ImportForm label="Promos (plan promotionnel d'une enseigne)" action={importPromos}>
+        <select name="enseigne" required defaultValue="" className="border rounded px-2 py-1 block">
+          <option value="" disabled>Enseigne...</option>
+          {ENSEIGNES.map(e => <option key={e} value={e}>{e}</option>)}
+        </select>
+      </ImportForm>
     </div>
   )
 }

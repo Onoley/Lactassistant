@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapMagasinRow, mapProduitRow, mapPromoRow } from './mappers'
+import { mapMagasinRow, mapProduitRow, mapPromoRows } from './mappers'
 
 describe('mapMagasinRow', () => {
   function ligne(overrides: Partial<Record<string, string>> = {}) {
@@ -56,21 +56,55 @@ describe('mapProduitRow', () => {
   })
 })
 
-describe('mapPromoRow', () => {
-  it('rejette une date mal formatée', () => {
-    expect(() => mapPromoRow({
-      code: 'PR1', enseigne: 'Carrefour', mecanique: '-20%',
-      date_installation: '01/09/2026', date_debut_vente: '2026-09-05', date_constat: '2026-09-10',
-      produits_codes: 'P1;P2',
-    })).toThrow('AAAA-MM-JJ')
+describe('mapPromoRows', () => {
+  function ligne(overrides: Partial<Record<string, string>> = {}) {
+    return {
+      'Thème': 'NOVEMBRE 1',
+      'Conso déb.': '02/11/2026',
+      'Conso fin': '16/11/2026',
+      'Revente déb.': '06/06/2026',
+      'Revente fin': '29/06/2026',
+      'OP Trade': '',
+      'Statut': '',
+      'Support OP': 'Tract',
+      'Niveau opération': 'Nationale',
+      'Libellé produit': 'Yaourt A\nYaourt B',
+      'EAN': '1111111111111\n2222222222222',
+      'Offre conso': '3 pour 2\n3 pour 2',
+      'CA Négo': '\n',
+      'CA Réal': '\n',
+      ...overrides,
+    }
+  }
+
+  it("découpe une opération réelle en une promo par produit rattachée à la même mécanique", () => {
+    const { valid, errors } = mapPromoRows([ligne()], 'Carrefour')
+    expect(errors).toHaveLength(0)
+    expect(valid).toHaveLength(1)
+    expect(valid[0].mecanique).toBe('3 pour 2')
+    expect(valid[0].produits).toHaveLength(2)
+    expect(valid[0].produits[0].ean).toBe('1111111111111')
+    expect(valid[0].dateDebutVente).toBe('2026-11-02')
+    expect(valid[0].dateInstallation).toBe('2026-06-06')
   })
 
-  it('découpe les codes produits multiples', () => {
-    const result = mapPromoRow({
-      code: 'PR1', enseigne: 'Carrefour', mecanique: '-20%',
-      date_installation: '2026-09-01', date_debut_vente: '2026-09-05', date_constat: '2026-09-10',
-      produits_codes: 'P1; P2',
-    })
-    expect(result.produitsCodes).toEqual(['P1', 'P2'])
+  it('éclate une opération en plusieurs promos quand les mécaniques diffèrent', () => {
+    const { valid } = mapPromoRows([ligne({ 'Offre conso': '3 pour 2\n2ème à 50%' })], 'Carrefour')
+    expect(valid).toHaveLength(2)
+    expect(valid.map(p => p.mecanique).sort()).toEqual(['2ème à 50%', '3 pour 2'])
+    expect(new Set(valid.map(p => p.code)).size).toBe(2)
+    expect(valid.every(p => p.produits.length === 1)).toBe(true)
+  })
+
+  it('signale une ligne avec une date "Conso déb." mal formatée sans bloquer les autres lignes', () => {
+    const { valid, errors } = mapPromoRows([ligne({ 'Conso déb.': '2026-11-02' }), ligne({ Thème: 'NOVEMBRE 2' })], 'Carrefour')
+    expect(errors).toHaveLength(1)
+    expect(errors[0].message).toContain('JJ/MM/AAAA')
+    expect(valid).toHaveLength(1)
+  })
+
+  it('conserve le champ OP Trade quand il est renseigné', () => {
+    const { valid } = mapPromoRows([ligne({ 'OP Trade': ' OP PRODUITS LAITIERS 2026' })], 'Auchan')
+    expect(valid[0].opTrade).toBe('OP PRODUITS LAITIERS 2026')
   })
 })

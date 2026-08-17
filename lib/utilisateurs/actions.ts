@@ -13,7 +13,8 @@ async function assertAdmin() {
 function validerAffectation(role: Role, secteurId: string | null, managerId: string | null) {
   if (role === 'commercial') {
     if (!secteurId) throw new Error('Le secteur est obligatoire pour un commercial')
-    if (!managerId) throw new Error('Le manager est obligatoire pour un commercial')
+    // Le manager est recommandé (sinon personne ne voit ce commercial dans une
+    // vue équipe) mais pas bloquant : aucun manager n'existe forcément encore.
   } else {
     if (secteurId) throw new Error('Un ' + role + ' ne doit pas avoir de secteur')
     if (managerId) throw new Error('Un ' + role + ' ne doit pas avoir de manager')
@@ -92,6 +93,13 @@ export async function supprimerUtilisateur(id: string) {
   const admin = createAdminClient()
 
   const { data: existant } = await admin.from('profiles').select('user_id').eq('id', id).single()
+
+  // Nettoie ce qui référence ce profil avant de le supprimer (sinon la
+  // contrainte de clé étrangère fait échouer la suppression sans message clair).
+  await admin.from('visites').delete().eq('commercial_id', id)
+  await admin.from('statuts_produit_magasin').update({ signale_par: null }).eq('signale_par', id)
+  await admin.from('profiles').update({ manager_id: null }).eq('manager_id', id)
+
   const { error } = await admin.from('profiles').delete().eq('id', id)
   if (error) throw error
 
