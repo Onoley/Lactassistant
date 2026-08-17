@@ -79,6 +79,22 @@ describe('prioritesSemaine', () => {
     const result = prioritesSemaine([mag], statuts, produitsParId, [], promosParProduitId, new Date('2026-08-17'))
     expect(result).toHaveLength(1)
     expect(result[0].raison).toBe('Promo terminée le 2026-06-30 — produit toujours manquant, à négocier.')
+    expect(result[0].niveau).toBe('cette_semaine')
+  })
+
+  it("à constater, une promo OP Trade reste urgente même terminée depuis longtemps — seules les OP Trade restent urgentes une fois la promo passée", () => {
+    const mag = magasin('1')
+    const statuts: StatutProduitMagasin[] = [
+      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
+    ]
+    const promoOpTradeTerminee = promo({
+      op_trade: 'OP LAITIERS', date_installation: '2026-06-01', date_debut_vente: '2026-06-10', date_fin_vente: '2026-06-30',
+    })
+    const promosParProduitId = new Map<string, Promo[]>([['p1', [promoOpTradeTerminee]]])
+    const result = prioritesSemaine([mag], statuts, produitsParId, [], promosParProduitId, new Date('2026-08-17'))
+    expect(result).toHaveLength(1)
+    expect(result[0].stadePromo).toBe('constater')
+    expect(result[0].niveau).toBe('urgent')
   })
 
   it("applique le statut_disponibilite de produits_enseigne pour verrouiller l'action recommandée", () => {
@@ -106,6 +122,7 @@ describe('prioritesSemaine', () => {
     expect(result[0].stadePromo).toBe('controler')
     expect(result[0].raison).toContain('échéance dépassée')
     expect(result[0].raison).not.toContain('dans 0 jour')
+    expect(result[0].niveau).toBe('cette_semaine')
   })
 
   it('le statut_disponibilite est scopé par enseigne : un verrou sur une enseigne ne bloque pas une autre enseigne pour le même produit', () => {

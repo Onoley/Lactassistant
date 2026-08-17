@@ -87,7 +87,12 @@ function candidatsPourProduit(statutProduitMagasin: StatutProduit, promosApplica
     if (!opTrade && !manquant) continue
     const stade = stadePromo(promo, aujourdHui)
     const jours = joursAvantEcheance(promo, aujourdHui)
-    const niveau: NiveauPriorite = opTrade ? 'urgent' : niveauDepuisJours(jours)
+    // Plus aucun jalon futur (constater, ou controler bloqué faute de
+    // date_fin_vente connue) : seule une OP Trade reste urgente indéfiniment,
+    // une promo classique redescend à cette_semaine plutôt que de camper en
+    // urgent pour toujours.
+    const enRetard = jalonsFuturs(promo, aujourdHui).length === 0
+    const niveau: NiveauPriorite = opTrade ? 'urgent' : (enRetard ? 'cette_semaine' : niveauDepuisJours(jours))
     candidats.push({ niveau, jours, promo, stade, raison: raisonPromo(promo, stade, jours, opTrade, statutProduitMagasin, aujourdHui) })
   }
 

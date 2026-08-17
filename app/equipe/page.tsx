@@ -1,5 +1,6 @@
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
 import { prioritesSemaine } from '@/lib/engine/priorites'
+import { PrioritesListe } from '@/components/priorites-liste'
 import type { Produit, Promo } from '@/lib/types'
 
 export default async function EquipePage() {
@@ -35,20 +36,7 @@ export default async function EquipePage() {
   return (
     <div className="p-6">
       <h1 className="text-xl font-bold mb-4">Mon équipe — priorités de la semaine</h1>
-      <table className="w-full text-sm">
-        <thead><tr><th className="text-left">Magasin</th><th className="text-left">Commercial</th><th className="text-left">Produit</th><th className="text-left">Niveau</th><th className="text-left">Raison</th></tr></thead>
-        <tbody>
-          {prioritesHebdo.map((p, i) => (
-            <tr key={`${p.magasin.id}-${p.produit.id}-${i}`}>
-              <td>{p.magasin.nom}</td>
-              <td>{emailParSecteur.get(p.magasin.secteur_id) ?? '-'}</td>
-              <td>{p.produit.nom}</td>
-              <td>{p.niveau}</td>
-              <td>{p.raison}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <PrioritesListe priorites={prioritesHebdo} variant="table" emailParSecteur={emailParSecteur} />
     </div>
   )
 }

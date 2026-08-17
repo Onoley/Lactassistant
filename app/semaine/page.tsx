@@ -3,9 +3,8 @@ import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
 import { prioritesSemaine } from '@/lib/engine/priorites'
 import { numeroSemaineCourante } from '@/lib/semaine'
 import { CalendrierSemaine } from './calendrier-semaine'
+import { PrioritesListe } from '@/components/priorites-liste'
 import type { Produit, Promo } from '@/lib/types'
-
-const LIBELLE_NIVEAU = { urgent: 'Urgent', cette_semaine: 'Cette semaine', a_anticiper: 'À anticiper' } as const
 
 export default async function SemainePage() {
   const supabase = createServerClient()
@@ -53,14 +52,7 @@ export default async function SemainePage() {
             {nonCouvertes.length} priorité(s) ne sont pas couvertes par votre semaine planifiée.
           </div>
         )}
-        <ul className="space-y-2">
-          {prioritesHebdo.slice(0, 15).map((p, i) => (
-            <li key={`${p.magasin.id}-${p.produit.id}-${i}`} className="border rounded p-2">
-              <p className="font-medium">{p.magasin.nom} — {LIBELLE_NIVEAU[p.niveau]}</p>
-              <p className="text-sm text-gray-600">{p.produit.nom} — {p.raison}</p>
-            </li>
-          ))}
-        </ul>
+        <PrioritesListe priorites={prioritesHebdo} variant="liste" />
       </div>
       <CalendrierSemaine semaine={semaine} magasins={magasins ?? []} visites={visites ?? []} />
     </div>
