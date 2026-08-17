@@ -1,19 +1,29 @@
 'use client'
 import { useState, useTransition } from 'react'
-import { definirAssortiment, definirPriorite, supprimerProduit } from '@/lib/produits/actions'
-import { ENSEIGNES, type Produit } from '@/lib/types'
+import { definirAssortiment, definirPriorite, definirStatutDisponibilite, supprimerProduit } from '@/lib/produits/actions'
+import { ENSEIGNES, type Produit, type StatutDisponibilite } from '@/lib/types'
+
+const LIBELLES_STATUT: Record<StatutDisponibilite, string> = {
+  commandable: 'Commandable',
+  non_commandable: 'Non commandable (déréférencé)',
+  arret_industriel: 'Arrêt industriel',
+  en_attente_referencement: 'En attente de référencement',
+}
 
 export function ProduitRow({
   produit,
   enseignesActuelles,
   rangActuel,
+  statutParEnseigne,
 }: {
   produit: Produit
   enseignesActuelles: Set<string>
   rangActuel: 20 | 50 | 70 | null
+  statutParEnseigne: Map<string, StatutDisponibilite>
 }) {
   const [enseignes, setEnseignes] = useState(enseignesActuelles)
   const [rang, setRang] = useState(rangActuel)
+  const [statuts, setStatuts] = useState(statutParEnseigne)
   const [pending, startTransition] = useTransition()
 
   function toggleEnseigne(enseigne: string) {
@@ -29,6 +39,13 @@ export function ProduitRow({
     const nouveauRang = value === '' ? null : (Number(value) as 20 | 50 | 70)
     setRang(nouveauRang)
     startTransition(() => { definirPriorite(produit.id, nouveauRang) })
+  }
+
+  function handleStatutChange(enseigne: string, statut: StatutDisponibilite) {
+    const next = new Map(statuts)
+    next.set(enseigne, statut)
+    setStatuts(next)
+    startTransition(() => { definirStatutDisponibilite(produit.id, enseigne, statut) })
   }
 
   async function handleDelete() {
@@ -52,6 +69,17 @@ export function ProduitRow({
       {ENSEIGNES.map(e => (
         <td key={e} className="text-center">
           <input type="checkbox" checked={enseignes.has(e)} onChange={() => toggleEnseigne(e)} />
+          {enseignes.has(e) && (
+            <select
+              value={statuts.get(e) ?? 'commandable'}
+              onChange={ev => handleStatutChange(e, ev.target.value as StatutDisponibilite)}
+              className="block text-[10px] border rounded mt-1"
+            >
+              {Object.entries(LIBELLES_STATUT).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          )}
         </td>
       ))}
       <td>

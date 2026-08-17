@@ -1,7 +1,7 @@
 'use client'
 import { useMemo, useState } from 'react'
 import { ProduitRow } from './produit-row'
-import { ENSEIGNES, type PrioriteProduit, type Produit, type ProduitEnseigne } from '@/lib/types'
+import { ENSEIGNES, type PrioriteProduit, type Produit, type ProduitEnseigne, type StatutDisponibilite } from '@/lib/types'
 
 export function ProduitsTable({
   produits,
@@ -28,6 +28,15 @@ export function ProduitsTable({
     for (const p of priorites) map.set(p.produit_id, p.rang)
     return map
   }, [priorites])
+
+  const statutParProduitEtEnseigne = useMemo(() => {
+    const map = new Map<string, Map<string, StatutDisponibilite>>()
+    for (const pe of produitsEnseigne) {
+      if (!map.has(pe.produit_id)) map.set(pe.produit_id, new Map())
+      map.get(pe.produit_id)!.set(pe.enseigne, pe.statut_disponibilite)
+    }
+    return map
+  }, [produitsEnseigne])
 
   const filtres = useMemo(() => {
     const q = recherche.trim().toLowerCase()
@@ -67,6 +76,7 @@ export function ProduitsTable({
                 produit={p}
                 enseignesActuelles={enseignesParProduit.get(p.id) ?? new Set()}
                 rangActuel={rangParProduit.get(p.id) ?? null}
+                statutParEnseigne={statutParProduitEtEnseigne.get(p.id) ?? new Map()}
               />
             ))}
           </tbody>
