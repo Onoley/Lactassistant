@@ -1,8 +1,8 @@
 'use server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
-import { readSpreadsheet, parseRows, type ImportError } from './parser'
-import { mapMagasinRow, mapProduitRow, mapPromoRows } from './mappers'
+import { readSpreadsheet, readVmhSheet, parseRows, type ImportError } from './parser'
+import { mapMagasinRow, mapProduitRow, mapPromoRows, mapVmhRow } from './mappers'
 
 export interface ImportSummary {
   imported: number
@@ -159,4 +159,44 @@ export async function importPromos(formData: FormData): Promise<ImportSummary> {
   }
 
   return { imported: deduped.length, errors }
+}
+
+export async function importVmh(formData: FormData): Promise<ImportSummary> {
+  await assertAdmin()
+  const file = formData.get('file') as File
+  const { periodeReference, rows } = readVmhSheet(await file.arrayBuffer())
+
+  const mapped = rows.map(mapVmhRow).filter((v): v is NonNullable<typeof v> => v !== null)
+
+  const admin = createAdminClient()
+  const { data: produits } = await admin.from('produits').select('id, code')
+  const produitIdByEan = new Map((produits ?? []).map(p => [p.code, p.id]))
+
+  const upserts = mapped
+    .map(v => {
+      const produitId = produitIdByEan.get(v.ean)
+      if (!produitId) return null
+      return {
+        produit_id: produitId,
+        vmh_hyper: v.vmhHyper,
+        vmh_super: v.vmhSuper,
+        dv_hmsm: v.dvHmsm,
+        dv_hyper: v.dvHyper,
+        dv_super: v.dvSuper,
+        prix_moyen: v.prixMoyen,
+        periode_reference: periodeReference,
+        updated_at: new Date().toISOString(),
+      }
+    })
+    .filter((v): v is NonNullable<typeof v> => v !== null)
+
+  if (upserts.length > 0) {
+    const { error } = await admin.from('vmh_national').upsert(upserts, { onConflict: 'produit_id' })
+    if (error) throw error
+  }
+
+  // EAN sans correspondance dans le catalogue (la plupart des 1524 lignes du
+  // fichier : c'est un export panel toute catégorie, pas seulement LNUF) —
+  // ignoré silencieusement par design, ce n'est pas une erreur d'import.
+  return { imported: upserts.length, errors: [] }
 }

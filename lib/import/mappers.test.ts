@@ -124,7 +124,10 @@ describe('mapVmhRow', () => {
     base[17] = 21.27722652169616
     base[18] = 9.241001784165155
     base[20] = 3.5875268491463155
-    for (const [i, v] of Object.entries(overrides)) base[Number(i)] = v
+    for (const [i, v] of Object.entries(overrides)) {
+      const idx = Number(i)
+      if (v !== undefined) base[idx] = v
+    }
     return base
   }
 

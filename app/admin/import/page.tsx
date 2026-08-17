@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { importMagasins, importProduits, importPromos, type ImportSummary } from '@/lib/import/actions'
+import { importMagasins, importProduits, importPromos, importVmh, type ImportSummary } from '@/lib/import/actions'
 import { ENSEIGNES } from '@/lib/types'
 
 function ImportForm({
@@ -71,6 +71,7 @@ export default function ImportPage() {
           {ENSEIGNES.map(e => <option key={e} value={e}>{e}</option>)}
         </select>
       </ImportForm>
+      <ImportForm label="VMH national (export panel)" action={importVmh} />
     </div>
   )
 }
