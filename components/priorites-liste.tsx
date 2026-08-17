@@ -2,8 +2,8 @@
 import { useMemo, useState } from 'react'
 import type { PrioriteHebdo, NiveauPriorite } from '@/lib/engine/priorites'
 
-const LIBELLE_NIVEAU: Record<NiveauPriorite, string> = { urgent: 'Urgent', cette_semaine: 'Cette semaine', a_anticiper: 'À anticiper' }
-const COULEUR_NIVEAU: Record<NiveauPriorite, string> = {
+export const LIBELLE_NIVEAU: Record<NiveauPriorite, string> = { urgent: 'Urgent', cette_semaine: 'Cette semaine', a_anticiper: 'À anticiper' }
+export const COULEUR_NIVEAU: Record<NiveauPriorite, string> = {
   urgent: 'bg-red-100 text-red-800 border-red-400',
   cette_semaine: 'bg-amber-100 text-amber-800 border-amber-400',
   a_anticiper: 'bg-blue-100 text-blue-800 border-blue-400',
