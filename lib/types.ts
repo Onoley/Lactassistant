@@ -43,10 +43,12 @@ export type Enseigne = (typeof ENSEIGNES)[number]
 
 export type StatutDisponibilite = 'commandable' | 'non_commandable' | 'arret_industriel' | 'en_attente_referencement'
 
+export type Typologie = 'obligatoire' | 'picking'
+
 export interface ProduitEnseigne {
   produit_id: string
   enseigne: string
-  typologie: string | null
+  typologie: Typologie | null
   statut_disponibilite: StatutDisponibilite
 }
 
@@ -69,12 +71,15 @@ export interface Promo {
 
 export type StatutProduit = 'present' | 'manquant' | 'rupture'
 
+export type RaisonAbsence = 'pas_de_place_rayon' | 'frein_prix' | 'jamais_reference' | 'concurrence_privilegiee' | 'autre'
+
 export interface StatutProduitMagasin {
   magasin_id: string
   produit_id: string
   statut: StatutProduit
   signale_par: string | null
   signale_at: string
+  raison_absence?: RaisonAbsence | null
 }
 
 export type StatutVisite = 'planifie' | 'realise'
@@ -86,4 +91,26 @@ export interface Visite {
   semaine: string
   jour: string
   statut: StatutVisite
+}
+
+export interface PdlMagasin {
+  magasin_id: string
+  pdl_generale: number | null
+  pdl_yaos: number | null
+  pdl_siggis: number | null
+  pdl_dessert: number | null
+  updated_at: string
+  updated_by: string | null
+}
+
+export interface VmhNational {
+  produit_id: string
+  vmh_hyper: number | null
+  vmh_super: number | null
+  dv_hmsm: number | null
+  dv_hyper: number | null
+  dv_super: number | null
+  prix_moyen: number | null
+  periode_reference: string | null
+  updated_at: string
 }
