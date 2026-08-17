@@ -2,7 +2,7 @@
 import { revalidatePath } from 'next/cache'
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import type { StatutDisponibilite } from '@/lib/types'
+import type { StatutDisponibilite, Typologie } from '@/lib/types'
 
 async function assertAdmin() {
   const supabase = createServerClient()
@@ -78,5 +78,16 @@ export async function definirPriorite(produitId: string, rang: 20 | 50 | 70 | nu
     )
     if (error) throw error
   }
+  revalidatePath('/admin/produits')
+}
+
+export async function definirTypologie(produitId: string, enseigne: string, typologie: Typologie | null) {
+  await assertAdmin()
+  const admin = createAdminClient()
+  const { error } = await admin.from('produits_enseigne')
+    .update({ typologie })
+    .eq('produit_id', produitId)
+    .eq('enseigne', enseigne)
+  if (error) throw error
   revalidatePath('/admin/produits')
 }

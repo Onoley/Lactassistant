@@ -1,7 +1,7 @@
 'use client'
 import { useState, useTransition } from 'react'
-import { definirAssortiment, definirPriorite, definirStatutDisponibilite, supprimerProduit } from '@/lib/produits/actions'
-import { ENSEIGNES, type Produit, type StatutDisponibilite } from '@/lib/types'
+import { definirAssortiment, definirPriorite, definirStatutDisponibilite, definirTypologie, supprimerProduit } from '@/lib/produits/actions'
+import { ENSEIGNES, type Produit, type StatutDisponibilite, type Typologie } from '@/lib/types'
 
 const LIBELLES_STATUT: Record<StatutDisponibilite, string> = {
   commandable: 'Commandable',
@@ -10,20 +10,28 @@ const LIBELLES_STATUT: Record<StatutDisponibilite, string> = {
   en_attente_referencement: 'En attente de référencement',
 }
 
+const LIBELLES_TYPOLOGIE: Record<Typologie, string> = {
+  obligatoire: 'Obligatoire',
+  picking: 'Picking',
+}
+
 export function ProduitRow({
   produit,
   enseignesActuelles,
   rangActuel,
   statutParEnseigne,
+  typologieParEnseigne,
 }: {
   produit: Produit
   enseignesActuelles: Set<string>
   rangActuel: 20 | 50 | 70 | null
   statutParEnseigne: Map<string, StatutDisponibilite>
+  typologieParEnseigne: Map<string, Typologie | null>
 }) {
   const [enseignes, setEnseignes] = useState(enseignesActuelles)
   const [rang, setRang] = useState(rangActuel)
   const [statuts, setStatuts] = useState(statutParEnseigne)
+  const [typologies, setTypologies] = useState(typologieParEnseigne)
   const [pending, startTransition] = useTransition()
 
   function toggleEnseigne(enseigne: string) {
@@ -48,6 +56,13 @@ export function ProduitRow({
     startTransition(() => { definirStatutDisponibilite(produit.id, enseigne, statut) })
   }
 
+  function handleTypologieChange(enseigne: string, typologie: Typologie | null) {
+    const next = new Map(typologies)
+    next.set(enseigne, typologie)
+    setTypologies(next)
+    startTransition(() => { definirTypologie(produit.id, enseigne, typologie) })
+  }
+
   async function handleDelete() {
     if (!confirm(`Supprimer "${produit.nom}" (${produit.code}) ?`)) return
     await supprimerProduit(produit.id)
@@ -70,15 +85,27 @@ export function ProduitRow({
         <td key={e} className="text-center">
           <input type="checkbox" checked={enseignes.has(e)} onChange={() => toggleEnseigne(e)} />
           {enseignes.has(e) && (
-            <select
-              value={statuts.get(e) ?? 'commandable'}
-              onChange={ev => handleStatutChange(e, ev.target.value as StatutDisponibilite)}
-              className="block text-[10px] border rounded mt-1"
-            >
-              {Object.entries(LIBELLES_STATUT).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
+            <>
+              <select
+                value={statuts.get(e) ?? 'commandable'}
+                onChange={ev => handleStatutChange(e, ev.target.value as StatutDisponibilite)}
+                className="block text-[10px] border rounded mt-1"
+              >
+                {Object.entries(LIBELLES_STATUT).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+              <select
+                value={typologies.get(e) ?? ''}
+                onChange={ev => handleTypologieChange(e, ev.target.value === '' ? null : (ev.target.value as Typologie))}
+                className="block text-[10px] border rounded mt-1"
+              >
+                <option value="">Typologie...</option>
+                {Object.entries(LIBELLES_TYPOLOGIE).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </>
           )}
         </td>
       ))}
