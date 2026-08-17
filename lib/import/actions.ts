@@ -62,6 +62,7 @@ export async function importMagasins(formData: FormData): Promise<ImportSummary>
       contact_nom: m.contactNom,
       contact_telephone: m.contactTelephone,
       contact_email: m.contactEmail,
+      surface: m.surface,
     })),
     { onConflict: 'code' }
   )

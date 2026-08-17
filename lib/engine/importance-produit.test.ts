@@ -4,7 +4,7 @@ import { scoreRangProduit } from './scoring'
 import type { Magasin, Produit, Promo, StatutProduit } from '@/lib/types'
 
 function magasin(id: string, overrides: Partial<Magasin> = {}): Magasin {
-  return { id, code: id, nom: id, enseigne: 'Carrefour', taille: 'super', adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null, ...overrides }
+  return { id, code: id, nom: id, enseigne: 'Carrefour', taille: 'super', adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null, surface: null, ...overrides }
 }
 
 const produit: Produit = { id: 'p1', code: 'P1', nom: 'Yaourt nature', categorie: null }

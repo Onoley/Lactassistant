@@ -3,7 +3,7 @@ import { produitATravailler } from './produit-a-travailler'
 import type { Magasin, Produit, Promo, StatutProduit, VmhNational } from '@/lib/types'
 
 function magasin(overrides: Partial<Magasin> = {}): Magasin {
-  return { id: '1', code: '1', nom: 'Magasin Test', enseigne: 'Carrefour', taille: 'hyper', adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null, ...overrides }
+  return { id: '1', code: '1', nom: 'Magasin Test', enseigne: 'Carrefour', taille: 'hyper', adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null, surface: null, ...overrides }
 }
 
 const produit: Produit = { id: 'p1', code: 'P1', nom: 'Yaourt Nature', categorie: null }

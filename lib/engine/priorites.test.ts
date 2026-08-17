@@ -3,7 +3,7 @@ import { prioritesSemaine } from './priorites'
 import type { Magasin, Produit, ProduitEnseigne, Promo, StatutProduitMagasin } from '@/lib/types'
 
 function magasin(id: string, overrides: Partial<Magasin> = {}): Magasin {
-  return { id, code: id, nom: `Magasin ${id}`, enseigne: 'Carrefour', taille: 'super', adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null, ...overrides }
+  return { id, code: id, nom: `Magasin ${id}`, enseigne: 'Carrefour', taille: 'super', adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null, surface: null, ...overrides }
 }
 
 const yaourt: Produit = { id: 'p1', code: 'P1', nom: 'Yaourt', categorie: null }

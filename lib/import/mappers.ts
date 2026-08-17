@@ -9,6 +9,7 @@ export interface MagasinImport {
   contactNom: string | null
   contactTelephone: string | null
   contactEmail: string | null
+  surface: number | null
 }
 
 // Correspondance "Raison Sociale" (export PDV) -> enseigne canonique utilisée
@@ -115,6 +116,7 @@ export function mapMagasinRow(row: Record<string, string>): MagasinImport {
     contactNom: null,
     contactTelephone: row['Téléphone']?.trim() || null,
     contactEmail: null,
+    surface: parseNombreFr(row['Surface']),
   }
 }
 

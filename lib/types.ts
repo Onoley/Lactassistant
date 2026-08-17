@@ -20,6 +20,7 @@ export interface Magasin {
   contact_nom: string | null
   contact_telephone: string | null
   contact_email: string | null
+  surface: number | null
 }
 
 export interface Produit {

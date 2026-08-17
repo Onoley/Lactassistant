@@ -3,7 +3,7 @@ import { vmhPertinent } from './vmh'
 import type { Magasin, VmhNational } from '@/lib/types'
 
 function magasin(taille: string): Magasin {
-  return { id: '1', code: '1', nom: 'Test', enseigne: 'Carrefour', taille, adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null }
+  return { id: '1', code: '1', nom: 'Test', enseigne: 'Carrefour', taille, adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null, surface: null }
 }
 
 const vmh: VmhNational = {

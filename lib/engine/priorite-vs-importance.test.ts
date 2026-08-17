@@ -4,7 +4,7 @@ import { importanceProduitFiche } from './importance-produit'
 import type { Magasin, Produit, StatutProduit, StatutProduitMagasin } from '@/lib/types'
 
 function magasin(id: string, overrides: Partial<Magasin> = {}): Magasin {
-  return { id, code: id, nom: `Magasin ${id}`, enseigne: 'Carrefour', taille: 'super', adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null, ...overrides }
+  return { id, code: id, nom: `Magasin ${id}`, enseigne: 'Carrefour', taille: 'super', adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null, surface: null, ...overrides }
 }
 
 describe('séparation priorité hebdomadaire vs importance fiche magasin', () => {
