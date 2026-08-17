@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
 import { prioritesSemaine } from '@/lib/engine/priorites'
+import { chargerTousLesPromoLiens } from '@/lib/engine/promo-liens'
 import { dateDuJour, decalerSemaine, numeroSemaineCourante } from '@/lib/semaine'
 import { CalendrierSemaine } from './calendrier-semaine'
 import { PrioritesListe } from '@/components/priorites-liste'
@@ -21,11 +22,11 @@ export default async function SemainePage({ searchParams }: { searchParams: Prom
   // se recalculent comme si on s'y trouvait.
   const aujourdHui = semaine === semaineCourante ? new Date() : new Date(dateDuJour(semaine, 0))
 
-  const [{ data: magasins }, { data: produits }, { data: produitsEnseigne }, { data: promoLiens }, { data: visites }] = await Promise.all([
+  const [{ data: magasins }, { data: produits }, { data: produitsEnseigne }, promoLiens, { data: visites }] = await Promise.all([
     supabase.from('magasins').select('*'),
     supabase.from('produits').select('*'),
     supabase.from('produits_enseigne').select('*'),
-    supabase.from('promo_produits').select('produit_id, promos(*)'),
+    chargerTousLesPromoLiens(supabase),
     supabase.from('visites').select('*').eq('semaine', semaine).eq('commercial_id', profile.id),
   ])
 
@@ -37,7 +38,7 @@ export default async function SemainePage({ searchParams }: { searchParams: Prom
 
   const produitsParId = new Map<string, Produit>((produits ?? []).map(p => [p.id, p]))
   const promosParProduitId = new Map<string, Promo[]>()
-  for (const lien of promoLiens ?? []) {
+  for (const lien of promoLiens) {
     const liste = promosParProduitId.get(lien.produit_id) ?? []
     liste.push(lien.promos as unknown as Promo)
     promosParProduitId.set(lien.produit_id, liste)
