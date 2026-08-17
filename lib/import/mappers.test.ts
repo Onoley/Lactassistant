@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapMagasinRow, mapProduitRow, mapPromoRows } from './mappers'
+import { mapMagasinRow, mapProduitRow, mapPromoRows, mapVmhRow } from './mappers'
 
 describe('mapMagasinRow', () => {
   function ligne(overrides: Partial<Record<string, string>> = {}) {
@@ -106,5 +106,51 @@ describe('mapPromoRows', () => {
   it('conserve le champ OP Trade quand il est renseigné', () => {
     const { valid } = mapPromoRows([ligne({ 'OP Trade': ' OP PRODUITS LAITIERS 2026' })], 'Auchan')
     expect(valid[0].opTrade).toBe('OP PRODUITS LAITIERS 2026')
+  })
+})
+
+describe('mapVmhRow', () => {
+  // Colonnes 0-indexées, copiées de la ligne 6 réelle de l'onglet "Vision CAT"
+  // du fichier "vmh et produit  2.xlsx" (SVELTESSE FERME ET FONDANT CAFE) :
+  // 0 Produits, 10 Desc EAN, 11 Prix (Derniere Periode), 15 DV HMSM,
+  // 16 DV HM, 17 DV SM, 18 VMH HM (Cumul 3), 20 VMH SM (Cumul 3).
+  function ligneReelle(overrides: Partial<Record<number, string | number | null>> = {}): (string | number | null)[] {
+    const base: (string | number | null)[] = new Array(34).fill(null)
+    base[0] = 'SVELTESSE FERME ET FONDANT CAFE X 4 125 GR STD - 8410100068183'
+    base[10] = '8410100068183'
+    base[11] = 1.6220223503058064
+    base[15] = 41.49097379528104
+    base[16] = 59.735929218205705
+    base[17] = 21.27722652169616
+    base[18] = 9.241001784165155
+    base[20] = 3.5875268491463155
+    for (const [i, v] of Object.entries(overrides)) base[Number(i)] = v
+    return base
+  }
+
+  it('extrait les champs pertinents depuis une ligne réelle', () => {
+    const result = mapVmhRow(ligneReelle())
+    expect(result).not.toBeNull()
+    expect(result?.ean).toBe('8410100068183')
+    expect(result?.prixMoyen).toBeCloseTo(1.622, 3)
+    expect(result?.dvHmsm).toBeCloseTo(41.49, 1)
+    expect(result?.dvHyper).toBeCloseTo(59.74, 1)
+    expect(result?.dvSuper).toBeCloseTo(21.28, 1)
+    expect(result?.vmhHyper).toBeCloseTo(9.24, 1)
+    expect(result?.vmhSuper).toBeCloseTo(3.59, 1)
+  })
+
+  it('ignore une ligne sans EAN (ligne de sous-total ou vide)', () => {
+    expect(mapVmhRow(ligneReelle({ 10: null }))).toBeNull()
+  })
+
+  it('ignore une ligne avec un EAN non numérique ("#N/A", placeholder Nielsen)', () => {
+    expect(mapVmhRow(ligneReelle({ 10: '#N/A' }))).toBeNull()
+  })
+
+  it('renvoie null pour les métriques absentes plutôt que NaN ou 0', () => {
+    const result = mapVmhRow(ligneReelle({ 18: null, 20: null }))
+    expect(result?.vmhHyper).toBeNull()
+    expect(result?.vmhSuper).toBeNull()
   })
 })

@@ -234,3 +234,40 @@ export function mapPromoRows(rows: Record<string, string>[], enseigne: string): 
 
   return { valid, errors }
 }
+
+export interface VmhImport {
+  ean: string
+  vmhHyper: number | null
+  vmhSuper: number | null
+  dvHmsm: number | null
+  dvHyper: number | null
+  dvSuper: number | null
+  prixMoyen: number | null
+}
+
+function versNombreOuNull(valeur: string | number | null): number | null {
+  if (valeur === null || valeur === '') return null
+  const n = Number(valeur)
+  return Number.isFinite(n) ? n : null
+}
+
+// Lit une ligne de l'onglet "Vision CAT" (colonnes 0-indexées) : couvre toute
+// la catégorie, pas seulement LNUF — une ligne sans EAN exploitable (blanche
+// ou placeholder Nielsen "#N/A") est silencieusement ignorée, ce n'est pas
+// une erreur d'import. Le rapprochement avec produits.code (et le rejet
+// silencieux des EAN non trouvés) se fait au niveau de l'action d'import.
+export function mapVmhRow(row: (string | number | null)[]): VmhImport | null {
+  const eanBrut = row[10]
+  const ean = eanBrut !== null && eanBrut !== undefined ? String(eanBrut).trim() : ''
+  if (!/^[0-9]{8,14}$/.test(ean)) return null
+
+  return {
+    ean,
+    vmhHyper: versNombreOuNull(row[18]),
+    vmhSuper: versNombreOuNull(row[20]),
+    dvHmsm: versNombreOuNull(row[15]),
+    dvHyper: versNombreOuNull(row[16]),
+    dvSuper: versNombreOuNull(row[17]),
+    prixMoyen: versNombreOuNull(row[11]),
+  }
+}

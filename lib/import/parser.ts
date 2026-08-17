@@ -31,3 +31,16 @@ export function parseRows<T>(
   })
   return { valid, errors }
 }
+
+export function readVmhSheet(buffer: ArrayBuffer): { periodeReference: string; rows: (string | number | null)[][] } {
+  const workbook = XLSX.read(buffer, { type: 'array' })
+  const sheet = workbook.Sheets['Vision CAT']
+  if (!sheet) throw new Error('Onglet "Vision CAT" introuvable dans le fichier')
+
+  const periodeCell = sheet['M5']
+  const periodeReference = periodeCell ? String(periodeCell.v ?? '').trim() : ''
+
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, range: 5, raw: true, defval: null }) as (string | number | null)[][]
+
+  return { periodeReference, rows }
+}
