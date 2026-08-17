@@ -16,13 +16,18 @@ export interface PrioriteHebdo {
 
 const ORDRE_NIVEAU: Record<NiveauPriorite, number> = { a_anticiper: 1, cette_semaine: 2, urgent: 3 }
 
-function joursAvantEcheance(promo: Promo, aujourdHui: Date): number {
-  const jalons = [promo.date_installation, promo.date_debut_vente, promo.date_fin_vente]
+function jalonsFuturs(promo: Promo, aujourdHui: Date): number[] {
+  return [promo.date_installation, promo.date_debut_vente, promo.date_fin_vente]
     .filter((d): d is string => Boolean(d))
     .map(d => Math.ceil((new Date(d).getTime() - aujourdHui.getTime()) / 86_400_000))
-  const futurs = jalons.filter(j => j >= 0)
-  // Tous les jalons connus sont passés (stade constater) : traité comme urgent,
-  // le produit manque toujours malgré une promo déjà terminée.
+    .filter(j => j >= 0)
+}
+
+function joursAvantEcheance(promo: Promo, aujourdHui: Date): number {
+  const futurs = jalonsFuturs(promo, aujourdHui)
+  // Tous les jalons connus sont passés (stade constater, ou controler sans
+  // date_fin_vente connue) : traité comme urgent pour le niveau, mais le
+  // message doit dire "échéance dépassée", pas "dans 0 jour(s)".
   return futurs.length > 0 ? Math.min(...futurs) : 0
 }
 
@@ -32,7 +37,7 @@ function niveauDepuisJours(jours: number): NiveauPriorite {
   return 'a_anticiper'
 }
 
-function raisonPromo(promo: Promo, stade: StadePromo, jours: number, opTrade: boolean, statutProduitMagasin: StatutProduit): string {
+function raisonPromo(promo: Promo, stade: StadePromo, jours: number, opTrade: boolean, statutProduitMagasin: StatutProduit, aujourdHui: Date): string {
   if (stade === 'constater') {
     const dateFin = promo.date_fin_vente ?? promo.date_debut_vente
     if (opTrade) return `Opération Trade "${promo.mecanique}" terminée le ${dateFin} — à constater (présence, stock, prix).`
@@ -45,7 +50,8 @@ function raisonPromo(promo: Promo, stade: StadePromo, jours: number, opTrade: bo
   const jalon = stade === 'anticiper'
     ? `installation le ${promo.date_installation ?? promo.date_debut_vente}`
     : `vente le ${promo.date_debut_vente}`
-  const echeance = jours >= 0 ? `dans ${jours} jour(s)` : 'échéance dépassée'
+  const enRetard = jalonsFuturs(promo, aujourdHui).length === 0
+  const echeance = enRetard ? 'échéance dépassée' : `dans ${jours} jour(s)`
   return `${prefixe} "${promo.mecanique}" chez ${promo.enseigne} : ${jalon}, ${echeance}.`
 }
 
@@ -80,7 +86,7 @@ function candidatsPourProduit(statutProduitMagasin: StatutProduit, promosApplica
     const stade = stadePromo(promo, aujourdHui)
     const jours = joursAvantEcheance(promo, aujourdHui)
     const niveau: NiveauPriorite = opTrade ? 'urgent' : niveauDepuisJours(jours)
-    candidats.push({ niveau, jours, promo, stade, raison: raisonPromo(promo, stade, jours, opTrade, statutProduitMagasin) })
+    candidats.push({ niveau, jours, promo, stade, raison: raisonPromo(promo, stade, jours, opTrade, statutProduitMagasin, aujourdHui) })
   }
 
   return candidats

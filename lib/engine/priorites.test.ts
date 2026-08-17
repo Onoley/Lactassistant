@@ -94,6 +94,20 @@ describe('prioritesSemaine', () => {
     expect(result[0].actionRecommandee).toBe('aucune_action_commande')
   })
 
+  it("signale l'échéance dépassée plutôt que 'dans 0 jour(s)' pour une promo sans date_fin_vente restée en controler bien après le début de vente", () => {
+    const mag = magasin('1')
+    const statuts: StatutProduitMagasin[] = [
+      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
+    ]
+    const promoSansFin = promo({ date_installation: '2026-05-20', date_debut_vente: '2026-06-01', date_fin_vente: null })
+    const promosParProduitId = new Map<string, Promo[]>([['p1', [promoSansFin]]])
+    const result = prioritesSemaine([mag], statuts, produitsParId, [], promosParProduitId, new Date('2026-08-17'))
+    expect(result).toHaveLength(1)
+    expect(result[0].stadePromo).toBe('controler')
+    expect(result[0].raison).toContain('échéance dépassée')
+    expect(result[0].raison).not.toContain('dans 0 jour')
+  })
+
   it('produit une entrée distincte par magasin', () => {
     const magA = magasin('1', { secteur_id: 'a' })
     const magB = magasin('2', { secteur_id: 'b' })
