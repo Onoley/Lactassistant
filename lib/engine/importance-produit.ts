@@ -10,7 +10,7 @@ export interface ImportanceProduit {
   promo: { promo: Promo; stade: StadePromo } | null
 }
 
-function promoPrincipale(promosScoped: Promo[], aujourdHui: Date): { promo: Promo; stade: StadePromo } | null {
+export function promoPrincipale(promosScoped: Promo[], aujourdHui: Date): { promo: Promo; stade: StadePromo } | null {
   if (promosScoped.length === 0) return null
   const opTrade = promosScoped.find(p => p.op_trade)
   const promo = opTrade ?? [...promosScoped].sort(
