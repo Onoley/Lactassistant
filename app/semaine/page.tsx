@@ -1,18 +1,25 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
 import { prioritesSemaine } from '@/lib/engine/priorites'
-import { numeroSemaineCourante } from '@/lib/semaine'
+import { dateDuJour, decalerSemaine, numeroSemaineCourante } from '@/lib/semaine'
 import { CalendrierSemaine } from './calendrier-semaine'
 import { PrioritesListe } from '@/components/priorites-liste'
 import type { Produit, Promo } from '@/lib/types'
 
-export default async function SemainePage() {
+export default async function SemainePage({ searchParams }: { searchParams: Promise<{ semaine?: string }> }) {
   const supabase = createServerClient()
   const profile = await getCurrentProfile(supabase)
   if (!profile) redirect('/login')
   if (profile.role !== 'commercial') redirect('/equipe')
 
-  const semaine = numeroSemaineCourante()
+  const semaineCourante = numeroSemaineCourante()
+  const semaine = (await searchParams).semaine || semaineCourante
+  // Pour la semaine en cours, référence = maintenant (comportement historique
+  // inchangé). Pour une semaine passée ou future consultée via la navigation,
+  // référence = le lundi de cette semaine-là, pour que les niveaux d'urgence
+  // se recalculent comme si on s'y trouvait.
+  const aujourdHui = semaine === semaineCourante ? new Date() : new Date(dateDuJour(semaine, 0))
 
   const [{ data: magasins }, { data: produits }, { data: produitsEnseigne }, { data: promoLiens }, { data: visites }] = await Promise.all([
     supabase.from('magasins').select('*'),
@@ -37,7 +44,7 @@ export default async function SemainePage() {
   }
 
   const prioritesHebdo = prioritesSemaine(
-    magasins ?? [], statuts ?? [], produitsParId, produitsEnseigne ?? [], promosParProduitId
+    magasins ?? [], statuts ?? [], produitsParId, produitsEnseigne ?? [], promosParProduitId, aujourdHui
   )
 
   const magasinIdsPlanifies = new Set((visites ?? []).map(v => v.magasin_id))
@@ -46,7 +53,14 @@ export default async function SemainePage() {
   return (
     <div className="p-6 grid grid-cols-2 gap-6">
       <div>
-        <h1 className="text-xl font-bold mb-4">Priorités de la semaine</h1>
+        <div className="flex items-center gap-3 mb-4">
+          <Link href={`/semaine?semaine=${decalerSemaine(semaine, -1)}`} className="text-sm underline">← Semaine précédente</Link>
+          <h1 className="text-xl font-bold">Priorités de la semaine ({semaine})</h1>
+          <Link href={`/semaine?semaine=${decalerSemaine(semaine, 1)}`} className="text-sm underline">Semaine suivante →</Link>
+          {semaine !== semaineCourante && (
+            <Link href="/semaine" className="text-sm underline text-blue-600">Revenir à cette semaine</Link>
+          )}
+        </div>
         {nonCouvertes.length > 0 && (
           <div className="bg-amber-100 border border-amber-400 rounded p-3 mb-4 text-sm">
             {nonCouvertes.length} priorité(s) ne sont pas couvertes par votre semaine planifiée.

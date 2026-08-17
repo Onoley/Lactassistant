@@ -37,6 +37,18 @@ function niveauDepuisJours(jours: number): NiveauPriorite {
   return 'a_anticiper'
 }
 
+// Jours avant le prochain jalon "à venir" (installation ou vente) — exclut
+// délibérément date_fin_vente : une fois l'installation et la vente passées
+// (stade controler ou constater), il n'y a plus de compte à rebours
+// pertinent pour le niveau, qu'il reste 2 jours ou 2 mois avant la fin.
+function joursAvantProchainJalonPrincipal(promo: Promo, aujourdHui: Date): number | null {
+  const jalons = [promo.date_installation, promo.date_debut_vente]
+    .filter((d): d is string => Boolean(d))
+    .map(d => Math.ceil((new Date(d).getTime() - aujourdHui.getTime()) / 86_400_000))
+    .filter(j => j >= 0)
+  return jalons.length > 0 ? Math.min(...jalons) : null
+}
+
 function raisonPromo(promo: Promo, stade: StadePromo, jours: number, opTrade: boolean, statutProduitMagasin: StatutProduit, aujourdHui: Date): string {
   if (stade === 'constater') {
     const dateFin = promo.date_fin_vente ?? promo.date_debut_vente
@@ -87,12 +99,16 @@ function candidatsPourProduit(statutProduitMagasin: StatutProduit, promosApplica
     if (!opTrade && !manquant) continue
     const stade = stadePromo(promo, aujourdHui)
     const jours = joursAvantEcheance(promo, aujourdHui)
-    // Plus aucun jalon futur (constater, ou controler bloqué faute de
-    // date_fin_vente connue) : seule une OP Trade reste urgente indéfiniment,
-    // une promo classique redescend à cette_semaine plutôt que de camper en
-    // urgent pour toujours.
-    const enRetard = jalonsFuturs(promo, aujourdHui).length === 0
-    const niveau: NiveauPriorite = opTrade ? 'urgent' : (enRetard ? 'cette_semaine' : niveauDepuisJours(jours))
+    const joursJalonPrincipal = joursAvantProchainJalonPrincipal(promo, aujourdHui)
+    // Tant qu'il reste un jalon à venir (installation ou vente), le niveau
+    // suit les mêmes seuils que n'importe quelle promo — une OP Trade encore
+    // loin dans le temps ne noie plus la liste en "urgent" par défaut. Une
+    // fois ces deux jalons passés (controler ou constater), il n'y a plus de
+    // compte à rebours pertinent : seule une OP Trade reste urgente
+    // indéfiniment, une promo classique redescend à cette_semaine.
+    const niveau: NiveauPriorite = joursJalonPrincipal !== null
+      ? niveauDepuisJours(joursJalonPrincipal)
+      : (opTrade ? 'urgent' : 'cette_semaine')
     candidats.push({ niveau, jours, promo, stade, raison: raisonPromo(promo, stade, jours, opTrade, statutProduitMagasin, aujourdHui) })
   }
 

@@ -19,3 +19,9 @@ export function dateDuJour(semaine: string, jourIndex: number): string {
   lundiCible.setUTCDate(lundiSemaine1.getUTCDate() + (num - 1) * 7 + jourIndex)
   return lundiCible.toISOString().slice(0, 10)
 }
+
+export function decalerSemaine(semaine: string, deltaSemaines: number): string {
+  const lundi = new Date(dateDuJour(semaine, 0))
+  lundi.setUTCDate(lundi.getUTCDate() + deltaSemaines * 7)
+  return numeroSemaineCourante(lundi)
+}

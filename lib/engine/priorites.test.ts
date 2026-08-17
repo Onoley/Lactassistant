@@ -35,12 +35,24 @@ describe('prioritesSemaine', () => {
     expect(result[0].raison).toBe('Rupture signalée — aucune promo en cours.')
   })
 
-  it('une promo OP Trade sur un produit manquant déclenche un niveau urgent', () => {
+  it("une promo OP Trade encore loin dans le temps ne force plus le niveau urgent — suit les mêmes seuils que les autres promos", () => {
     const mag = magasin('1')
     const statuts: StatutProduitMagasin[] = [
       { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '', raison_absence: null },
     ]
     const promoOpTrade = promo({ op_trade: 'OP LAITIERS', date_installation: '2026-12-01', date_debut_vente: '2026-12-10' })
+    const promosParProduitId = new Map<string, Promo[]>([['p1', [promoOpTrade]]])
+    const result = prioritesSemaine([mag], statuts, produitsParId, [], promosParProduitId, new Date('2026-08-17'))
+    expect(result).toHaveLength(1)
+    expect(result[0].niveau).toBe('a_anticiper')
+  })
+
+  it('une promo OP Trade proche (installation dans 3 jours) est urgente via les seuils normaux', () => {
+    const mag = magasin('1')
+    const statuts: StatutProduitMagasin[] = [
+      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '', raison_absence: null },
+    ]
+    const promoOpTrade = promo({ op_trade: 'OP LAITIERS', date_installation: '2026-08-20', date_debut_vente: '2026-08-25' })
     const promosParProduitId = new Map<string, Promo[]>([['p1', [promoOpTrade]]])
     const result = prioritesSemaine([mag], statuts, produitsParId, [], promosParProduitId, new Date('2026-08-17'))
     expect(result).toHaveLength(1)
