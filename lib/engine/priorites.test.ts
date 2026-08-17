@@ -108,6 +108,25 @@ describe('prioritesSemaine', () => {
     expect(result[0].raison).not.toContain('dans 0 jour')
   })
 
+  it('le statut_disponibilite est scopé par enseigne : un verrou sur une enseigne ne bloque pas une autre enseigne pour le même produit', () => {
+    const magCarrefour = magasin('1', { enseigne: 'Carrefour' })
+    const magLeclerc = magasin('2', { enseigne: 'Leclerc' })
+    const statuts: StatutProduitMagasin[] = [
+      { magasin_id: '1', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '' },
+      { magasin_id: '2', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '' },
+    ]
+    const produitsEnseigne: ProduitEnseigne[] = [
+      { produit_id: 'p1', enseigne: 'Carrefour', typologie: null, statut_disponibilite: 'non_commandable' },
+      { produit_id: 'p1', enseigne: 'Leclerc', typologie: null, statut_disponibilite: 'commandable' },
+    ]
+    const result = prioritesSemaine([magCarrefour, magLeclerc], statuts, produitsParId, produitsEnseigne, new Map(), new Date('2026-08-17'))
+    expect(result).toHaveLength(2)
+    const carrefourEntry = result.find(r => r.magasin.id === '1')!
+    const leclercEntry = result.find(r => r.magasin.id === '2')!
+    expect(carrefourEntry.actionRecommandee).toBe('aucune_action_commande')
+    expect(leclercEntry.actionRecommandee).not.toBe('aucune_action_commande')
+  })
+
   it('produit une entrée distincte par magasin', () => {
     const magA = magasin('1', { secteur_id: 'a' })
     const magB = magasin('2', { secteur_id: 'b' })

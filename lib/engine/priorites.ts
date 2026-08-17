@@ -48,7 +48,9 @@ function raisonPromo(promo: Promo, stade: StadePromo, jours: number, opTrade: bo
   }
   const prefixe = opTrade ? 'Promo OP Trade' : 'Promo'
   const jalon = stade === 'anticiper'
-    ? `installation le ${promo.date_installation ?? promo.date_debut_vente}`
+    ? (promo.date_installation
+        ? `installation le ${promo.date_installation}`
+        : `vente le ${promo.date_debut_vente}`)
     : `vente le ${promo.date_debut_vente}`
   const enRetard = jalonsFuturs(promo, aujourdHui).length === 0
   const echeance = enRetard ? 'échéance dépassée' : `dans ${jours} jour(s)`
@@ -101,6 +103,11 @@ function meilleurCandidat(candidats: Candidat[]): Candidat | null {
   })
 }
 
+interface ResultatInterne {
+  hebdo: PrioriteHebdo
+  jours: number
+}
+
 export function prioritesSemaine(
   magasins: Magasin[],
   statuts: StatutProduitMagasin[],
@@ -120,7 +127,7 @@ export function prioritesSemaine(
     statutParMagasinEtProduit.get(s.magasin_id)!.set(s.produit_id, s.statut)
   }
 
-  const resultats: PrioriteHebdo[] = []
+  const resultats: ResultatInterne[] = []
 
   for (const magasin of magasins) {
     const statutsMagasin = statutParMagasinEtProduit.get(magasin.id) ?? new Map<string, StatutProduit>()
@@ -146,16 +153,28 @@ export function prioritesSemaine(
       const statutDisponibilite = statutDispoParProduitEtEnseigne.get(`${produitId}:${magasin.enseigne}`) ?? 'commandable'
 
       resultats.push({
-        magasin,
-        produit,
-        niveau: meilleur.niveau,
-        raison: meilleur.raison,
-        stadePromo: meilleur.stade,
-        promo: meilleur.promo,
-        actionRecommandee: actionRecommandee(statutDisponibilite, meilleur.stade, statutProduitMagasin),
+        hebdo: {
+          magasin,
+          produit,
+          niveau: meilleur.niveau,
+          raison: meilleur.raison,
+          stadePromo: meilleur.stade,
+          promo: meilleur.promo,
+          actionRecommandee: actionRecommandee(statutDisponibilite, meilleur.stade, statutProduitMagasin),
+        },
+        jours: meilleur.jours,
       })
     }
   }
 
-  return resultats.sort((a, b) => ORDRE_NIVEAU[b.niveau] - ORDRE_NIVEAU[a.niveau])
+  // Tri par niveau, puis par jours ascendant au sein d'un même niveau — sans
+  // ça, /semaine .slice(0, 15) coupe arbitrairement selon l'ordre de boucle
+  // plutôt que par échéance réelle. `jours` reste interne : pas exposé sur
+  // PrioriteHebdo, aucun consommateur n'en a besoin.
+  return resultats
+    .sort((a, b) => {
+      const diffNiveau = ORDRE_NIVEAU[b.hebdo.niveau] - ORDRE_NIVEAU[a.hebdo.niveau]
+      return diffNiveau !== 0 ? diffNiveau : a.jours - b.jours
+    })
+    .map(r => r.hebdo)
 }
