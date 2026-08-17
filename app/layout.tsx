@@ -46,10 +46,11 @@ export default async function RootLayout({
               <>
                 <Link href="/admin/import">Import</Link>
                 <Link href="/admin/produits">Produits</Link>
+                <Link href="/admin/secteurs">Secteurs</Link>
                 <Link href="/admin/utilisateurs">Utilisateurs</Link>
               </>
             )}
-            <span className="ml-auto text-sm text-gray-500">{profile.email}</span>
+            <Link href="/mon-compte" className="ml-auto text-sm text-gray-500">{profile.email}</Link>
             <SignOutButton />
           </nav>
         )}

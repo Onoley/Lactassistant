@@ -2,14 +2,46 @@ import { describe, expect, it } from 'vitest'
 import { mapMagasinRow, mapProduitRow, mapPromoRow } from './mappers'
 
 describe('mapMagasinRow', () => {
-  it('accepte une ligne valide', () => {
-    const result = mapMagasinRow({ code: 'M1', nom: 'Carrefour Test', enseigne: 'Carrefour', taille: 'super', secteur: 'Nord', adresse: '', contact_nom: '', contact_telephone: '', contact_email: '' })
-    expect(result.code).toBe('M1')
-    expect(result.secteurNom).toBe('Nord')
+  function ligne(overrides: Partial<Record<string, string>> = {}) {
+    return {
+      'Priorisation': 'Linéaire <125m',
+      'Raison Sociale': 'CARREFOUR MARKET',
+      'Code Postal': '75009',
+      'Ville': 'PARIS 09EME',
+      'Téléphone': '01 45 26 83 37',
+      'Adresse': '61 RUE MARGUERITE DE ROCHECHOUART',
+      'Code du Point de Vente': '75115',
+      ...overrides,
+    }
+  }
+
+  it('accepte une ligne réelle de l\'export "MES MAGASINS"', () => {
+    const result = mapMagasinRow(ligne())
+    expect(result.code).toBe('75115')
+    expect(result.enseigne).toBe('Carrefour Market')
+    expect(result.taille).toBe('super')
+    expect(result.nom).toContain('Carrefour Market')
+    expect(result.adresse).toContain('75009')
   })
 
-  it("rejette une ligne sans code", () => {
-    expect(() => mapMagasinRow({ nom: 'X', enseigne: 'Carrefour', taille: 'super', secteur: 'Nord' })).toThrow('code')
+  it('déduit hyper/proxi/drive depuis la Priorisation', () => {
+    expect(mapMagasinRow(ligne({ Priorisation: 'Linéaire >125m', 'Raison Sociale': 'CARREFOUR' })).taille).toBe('hyper')
+    expect(mapMagasinRow(ligne({ Priorisation: 'Proxi', 'Raison Sociale': 'INTERMARCHE EXPRESS' })).taille).toBe('proxi')
+    expect(mapMagasinRow(ligne({ Priorisation: 'Drive', 'Raison Sociale': 'E. LECLERC DRIVE' })).taille).toBe('drive')
+  })
+
+  it('retombe sur le format déduit de l\'enseigne pour les magasins "Non Priorisé"', () => {
+    expect(mapMagasinRow(ligne({ Priorisation: 'Non Priorisé', 'Raison Sociale': 'E. LECLERC DRIVE' })).taille).toBe('drive')
+    expect(mapMagasinRow(ligne({ Priorisation: 'Non Priorisé', 'Raison Sociale': 'AUCHAN SUPERMARCHE' })).taille).toBe('super')
+  })
+
+  it('rejette une raison sociale sans correspondance connue', () => {
+    expect(() => mapMagasinRow(ligne({ 'Raison Sociale': 'MONOPRIX' }))).toThrow('Enseigne inconnue')
+  })
+
+  it('rejette une ligne sans code du point de vente', () => {
+    const { 'Code du Point de Vente': _omit, ...sansCode } = ligne()
+    expect(() => mapMagasinRow(sansCode)).toThrow('Code du Point de Vente')
   })
 })
 

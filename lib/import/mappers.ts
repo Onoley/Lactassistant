@@ -3,11 +3,45 @@ export interface MagasinImport {
   nom: string
   enseigne: string
   taille: string
-  secteurNom: string
   adresse: string | null
   contactNom: string | null
   contactTelephone: string | null
   contactEmail: string | null
+}
+
+// Correspondance "Raison Sociale" (export PDV) -> enseigne canonique utilisée
+// dans le reste de l'app (produits_enseigne, promos, argumentaire).
+const ENSEIGNE_PAR_RAISON_SOCIALE: Record<string, string> = {
+  'CARREFOUR MARKET': 'Carrefour Market',
+  'CENTRE LECLERC': 'Leclerc',
+  'INTERMARCHE EXPRESS': 'Intermarche',
+  'INTERMARCHE SUPER': 'Intermarche',
+  CARREFOUR: 'Carrefour',
+  'CARREFOUR EX CORA': 'Carrefour',
+  'E. LECLERC DRIVE': 'Leclerc',
+  'AUCHAN SUPERMARCHE': 'Auchan',
+  AUCHAN: 'Auchan',
+  'SUPER U': 'U',
+}
+
+const TAILLE_PAR_PRIORISATION: Record<string, string> = {
+  'Linéaire >125m': 'hyper',
+  'Linéaire <125m': 'super',
+  Proxi: 'proxi',
+  Drive: 'drive',
+}
+
+function deviner(raisonSociale: string): string {
+  const enseigne = ENSEIGNE_PAR_RAISON_SOCIALE[raisonSociale]
+  if (!enseigne) throw new Error(`Enseigne inconnue pour "${raisonSociale}" — ajouter la correspondance dans lib/import/mappers.ts`)
+  return enseigne
+}
+
+function deviverTaille(priorisation: string, raisonSociale: string): string {
+  const taille = TAILLE_PAR_PRIORISATION[priorisation]
+  if (taille) return taille
+  // "Non Priorisé" (magasins inactifs) : déduit du format de l'enseigne.
+  return raisonSociale.includes('DRIVE') ? 'drive' : 'super'
 }
 
 export interface ProduitImport {
@@ -41,17 +75,31 @@ function requireDate(row: Record<string, string>, field: string): string {
   return value
 }
 
+function titleCase(s: string): string {
+  return s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())
+}
+
+// Lit l'export "MES MAGASINS" (parc de points de vente d'un commercial) tel
+// que fourni par l'outil interne — colonnes en toutes lettres, pas de code
+// technique. Un fichier = un territoire : le secteur est saisi une fois dans
+// le formulaire d'import, pas colonne par colonne.
 export function mapMagasinRow(row: Record<string, string>): MagasinImport {
+  const raisonSociale = requireField(row, 'Raison Sociale')
+  const adresseBrute = requireField(row, 'Adresse')
+  const codePostal = requireField(row, 'Code Postal')
+  const ville = requireField(row, 'Ville')
+  const code = requireField(row, 'Code du Point de Vente')
+  const priorisation = row['Priorisation']?.trim() ?? ''
+
   return {
-    code: requireField(row, 'code'),
-    nom: requireField(row, 'nom'),
-    enseigne: requireField(row, 'enseigne'),
-    taille: requireField(row, 'taille'),
-    secteurNom: requireField(row, 'secteur'),
-    adresse: row.adresse?.trim() || null,
-    contactNom: row.contact_nom?.trim() || null,
-    contactTelephone: row.contact_telephone?.trim() || null,
-    contactEmail: row.contact_email?.trim() || null,
+    code,
+    nom: `${titleCase(raisonSociale)} - ${titleCase(adresseBrute)}`,
+    enseigne: deviner(raisonSociale),
+    taille: deviverTaille(priorisation, raisonSociale),
+    adresse: `${adresseBrute}, ${codePostal} ${ville}`,
+    contactNom: null,
+    contactTelephone: row['Téléphone']?.trim() || null,
+    contactEmail: null,
   }
 }
 

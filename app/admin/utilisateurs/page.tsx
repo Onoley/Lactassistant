@@ -13,10 +13,10 @@ export default async function UtilisateursPage() {
       <h1 className="text-xl font-bold">Utilisateurs</h1>
       <UtilisateurForm secteurs={secteurs ?? []} managers={managers} />
       <table className="w-full text-sm">
-        <thead><tr><th className="text-left">Email</th><th className="text-left">Rôle</th><th className="text-left">Secteur</th><th className="text-left">Manager</th><th></th></tr></thead>
+        <thead><tr><th className="text-left">Email</th><th className="text-left">Rôle</th><th className="text-left">Secteur</th><th className="text-left">Manager</th><th className="text-left">Compte</th><th></th></tr></thead>
         <tbody>
           {(profiles ?? []).map(p => (
-            <UtilisateurRow key={p.id} profile={p} secteurs={secteurs ?? []} managers={managers} />
+            <UtilisateurRow key={p.id} profile={{ ...p, compteActif: p.user_id !== null }} secteurs={secteurs ?? []} managers={managers} />
           ))}
         </tbody>
       </table>

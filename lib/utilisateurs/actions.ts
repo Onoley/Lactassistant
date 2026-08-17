@@ -65,6 +65,28 @@ export async function modifierUtilisateur(
   revalidatePath('/admin/utilisateurs')
 }
 
+export async function definirMotDePasseUtilisateur(id: string, motDePasse: string) {
+  await assertAdmin()
+  if (motDePasse.length < 6) throw new Error('Le mot de passe doit faire au moins 6 caractères')
+
+  const admin = createAdminClient()
+  const { data: existant, error: fetchError } = await admin.from('profiles').select('email, user_id').eq('id', id).single()
+  if (fetchError) throw fetchError
+
+  if (existant.user_id) {
+    const { error } = await admin.auth.admin.updateUserById(existant.user_id, { password: motDePasse })
+    if (error) throw error
+  } else {
+    const { error } = await admin.auth.admin.createUser({
+      email: existant.email,
+      password: motDePasse,
+      email_confirm: true,
+    })
+    if (error) throw error
+  }
+  revalidatePath('/admin/utilisateurs')
+}
+
 export async function supprimerUtilisateur(id: string) {
   await assertAdmin()
   const admin = createAdminClient()

@@ -31,6 +31,9 @@ function dedupeByCode<T extends { code: string }>(items: T[]): { deduped: T[]; d
 
 export async function importMagasins(formData: FormData): Promise<ImportSummary> {
   await assertAdmin()
+  const secteurNom = (formData.get('secteur') as string)?.trim()
+  if (!secteurNom) throw new Error('Le secteur est obligatoire pour importer un parc de magasins')
+
   const file = formData.get('file') as File
   const rows = readSpreadsheet(await file.arrayBuffer())
   const { valid, errors } = parseRows(rows, mapMagasinRow)
@@ -41,14 +44,13 @@ export async function importMagasins(formData: FormData): Promise<ImportSummary>
   })
 
   const admin = createAdminClient()
-  const secteurNoms = [...new Set(deduped.map(m => m.secteurNom))]
-  const { data: secteurs, error: secteursError } = await admin
+  const { data: secteur, error: secteurError } = await admin
     .from('secteurs')
-    .upsert(secteurNoms.map(nom => ({ nom })), { onConflict: 'nom' })
-    .select('id, nom')
-  if (secteursError) throw secteursError
+    .upsert({ nom: secteurNom }, { onConflict: 'nom' })
+    .select('id')
+    .single()
+  if (secteurError) throw secteurError
 
-  const secteurIdByNom = new Map((secteurs ?? []).map(s => [s.nom, s.id]))
   const { error } = await admin.from('magasins').upsert(
     deduped.map(m => ({
       code: m.code,
@@ -56,7 +58,7 @@ export async function importMagasins(formData: FormData): Promise<ImportSummary>
       enseigne: m.enseigne,
       taille: m.taille,
       adresse: m.adresse,
-      secteur_id: secteurIdByNom.get(m.secteurNom),
+      secteur_id: secteur.id,
       contact_nom: m.contactNom,
       contact_telephone: m.contactTelephone,
       contact_email: m.contactEmail,
