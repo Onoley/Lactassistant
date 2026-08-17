@@ -19,15 +19,16 @@ export default async function FicheMagasinPage({ params }: { params: Promise<{ i
   const { data: statuts } = await supabase.from('statuts_produit_magasin').select('*').eq('magasin_id', magasin.id)
   const statutParProduit = new Map((statuts ?? []).map(s => [s.produit_id, s.statut as StatutProduit]))
 
-  // Trié par score décroissant (urgence, OP Trade, magasins similaires) —
-  // les manquants les plus prioritaires apparaissent en premier.
-  const lignesAvecArguments = await chargerArgumentsFicheMagasin(magasin.id)
-  const argumentsParProduit = new Map(lignesAvecArguments.map(l => [l.produitId, l]))
-  const idsManquants = new Set(lignesAvecArguments.map(l => l.produitId))
+  // Trié par importance décroissante (rang Top70, magasins comparables,
+  // promo) — les manquants les plus importants à pousser apparaissent en
+  // premier.
+  const lignesImportance = await chargerArgumentsFicheMagasin(magasin.id)
+  const importanceParProduit = new Map(lignesImportance.map(l => [l.produitId, l]))
+  const idsManquants = new Set(lignesImportance.map(l => l.produitId))
   const produitsParId = new Map((produits ?? []).map(p => [p.id, p]))
 
   const produitsTries = [
-    ...lignesAvecArguments.map(l => produitsParId.get(l.produitId)).filter((p): p is NonNullable<typeof p> => Boolean(p)),
+    ...lignesImportance.map(l => produitsParId.get(l.produitId)).filter((p): p is NonNullable<typeof p> => Boolean(p)),
     ...(produits ?? []).filter(p => !idsManquants.has(p.id)),
   ]
 
@@ -54,9 +55,9 @@ export default async function FicheMagasinPage({ params }: { params: Promise<{ i
                   />
                 </td>
               </tr>
-              {argumentsParProduit.get(p.id)?.arguments.map((arg, i) => (
-                <tr key={`${p.id}-arg-${i}`}>
-                  <td colSpan={2} className="text-sm text-amber-700 pl-4">{arg.message}</td>
+              {importanceParProduit.get(p.id)?.raisons.map((raison, i) => (
+                <tr key={`${p.id}-raison-${i}`}>
+                  <td colSpan={2} className="text-sm text-amber-700 pl-4">{raison}</td>
                 </tr>
               ))}
             </Fragment>

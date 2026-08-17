@@ -1,20 +1,20 @@
 import { createServerClient } from '@/lib/supabase/server'
-import { genererArguments, type Argument } from './arguments'
+import { importanceProduitFiche } from './importance-produit'
 import type { CritereSimilarite } from './similarity'
 import type { Promo, StatutProduit } from '@/lib/types'
 
-export interface LigneProduitAvecArguments {
+export interface LigneProduitImportance {
   produitId: string
   produitNom: string
   statut: StatutProduit
-  arguments: Argument[]
+  raisons: string[]
   score: number
 }
 
 export async function chargerArgumentsFicheMagasin(
   magasinId: string,
   critere: CritereSimilarite = 'les_deux'
-): Promise<LigneProduitAvecArguments[]> {
+): Promise<LigneProduitImportance[]> {
   const supabase = createServerClient()
   const { data: magasin } = await supabase.from('magasins').select('*').eq('id', magasinId).single()
   if (!magasin) return []
@@ -31,7 +31,7 @@ export async function chargerArgumentsFicheMagasin(
   })
   if (manquants.length === 0) return []
 
-  // Comparaison "magasins similaires" limitée au secteur du magasin consulté
+  // Comparaison "magasins comparables" limitée au secteur du magasin consulté
   // (pas au parc national) — RLS autorise déjà un commercial/manager à lire
   // les autres magasins et statuts de son propre secteur, pas besoin du
   // client admin ici.
@@ -57,19 +57,19 @@ export async function chargerArgumentsFicheMagasin(
     .map(produit => {
       const priorite = prioriteParProduit.get(produit.id)
       const statut = statutParProduit.get(produit.id)!
-      if (!priorite) return { produitId: produit.id, produitNom: produit.nom, statut, arguments: [], score: 0 }
+      if (!priorite) return { produitId: produit.id, produitNom: produit.nom, statut, raisons: [], score: 0 }
 
       const statutsPourCeProduit = new Map<string, StatutProduit>(
         (statutsSecteur ?? []).filter(s => s.produit_id === produit.id).map(s => [s.magasin_id, s.statut as StatutProduit])
       )
 
-      const { arguments: args, score } = genererArguments(
+      const { raisons, score } = importanceProduitFiche(
         magasin, produit, priorite.rang as 20 | 50 | 70,
         magasinsSecteur ?? [], statutsPourCeProduit,
         promosParProduit.get(produit.id) ?? [], critere
       )
 
-      return { produitId: produit.id, produitNom: produit.nom, statut, arguments: args, score }
+      return { produitId: produit.id, produitNom: produit.nom, statut, raisons, score }
     })
     .sort((a, b) => b.score - a.score)
 }
