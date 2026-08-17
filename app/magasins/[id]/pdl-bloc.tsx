@@ -1,5 +1,5 @@
 'use client'
-import { useState, useTransition } from 'react'
+import { useTransition } from 'react'
 import { definirPdl } from '@/lib/pdl/actions'
 
 type ChampPdl = 'pdl_generale' | 'pdl_yaos' | 'pdl_siggis' | 'pdl_dessert'
@@ -12,13 +12,12 @@ const CHAMPS: Array<{ cle: ChampPdl; label: string }> = [
 ]
 
 export function PdlBloc({ magasinId, pdl }: { magasinId: string; pdl: Record<ChampPdl, number | null> }) {
-  const [valeurs, setValeurs] = useState(pdl)
   const [pending, startTransition] = useTransition()
 
   function handleBlur(cle: ChampPdl, valeurTexte: string) {
     const nombre = valeurTexte.trim() === '' ? null : Number(valeurTexte)
     if (nombre !== null && !Number.isFinite(nombre)) return
-    setValeurs({ ...valeurs, [cle]: nombre })
+    if (nombre === pdl[cle]) return
     startTransition(() => { definirPdl(magasinId, cle, nombre) })
   }
 
@@ -30,7 +29,7 @@ export function PdlBloc({ magasinId, pdl }: { magasinId: string; pdl: Record<Cha
           <input
             type="number"
             step="0.1"
-            defaultValue={valeurs[cle] ?? ''}
+            defaultValue={pdl[cle] ?? ''}
             placeholder="-"
             onBlur={e => handleBlur(cle, e.target.value)}
             className="border rounded px-2 py-1 w-20"

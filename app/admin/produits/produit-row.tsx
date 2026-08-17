@@ -26,7 +26,7 @@ export function ProduitRow({
   enseignesActuelles: Set<string>
   rangActuel: 20 | 50 | 70 | null
   statutParEnseigne: Map<string, StatutDisponibilite>
-  typologieParEnseigne: Map<string, Typologie | null>
+  typologieParEnseigne: Map<string, string | null>
 }) {
   const [enseignes, setEnseignes] = useState(enseignesActuelles)
   const [rang, setRang] = useState(rangActuel)
@@ -104,6 +104,13 @@ export function ProduitRow({
                 {Object.entries(LIBELLES_TYPOLOGIE).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
                 ))}
+                {(() => {
+                  const valeurActuelle = typologies.get(e)
+                  if (valeurActuelle && valeurActuelle !== 'obligatoire' && valeurActuelle !== 'picking') {
+                    return <option value={valeurActuelle}>Valeur héritée : {valeurActuelle}</option>
+                  }
+                  return null
+                })()}
               </select>
             </>
           )}

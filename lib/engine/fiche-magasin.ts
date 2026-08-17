@@ -4,6 +4,12 @@ import { prioritesSemaine } from './priorites'
 import type { CritereSimilarite } from './similarity'
 import type { Produit, Promo, RaisonAbsence, StatutProduit, Typologie, VmhNational } from '@/lib/types'
 
+export function comparerProduitsATravailler(a: ProduitATravailler, b: ProduitATravailler): number {
+  const aObligatoire = a.typologie === 'obligatoire' ? 1 : 0
+  const bObligatoire = b.typologie === 'obligatoire' ? 1 : 0
+  return aObligatoire !== bObligatoire ? bObligatoire - aObligatoire : b.score - a.score
+}
+
 export async function chargerProduitsATravailler(
   magasinId: string,
   critere: CritereSimilarite = 'les_deux'
@@ -90,9 +96,5 @@ export async function chargerProduitsATravailler(
         niveauParProduit.get(produit.id) ?? null
       )
     })
-    .sort((a, b) => {
-      const aObligatoire = a.typologie === 'obligatoire' ? 1 : 0
-      const bObligatoire = b.typologie === 'obligatoire' ? 1 : 0
-      return aObligatoire !== bObligatoire ? bObligatoire - aObligatoire : b.score - a.score
-    })
+    .sort(comparerProduitsATravailler)
 }

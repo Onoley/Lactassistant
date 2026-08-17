@@ -68,7 +68,7 @@ function questionsDecouverte(raisonAbsence: RaisonAbsence | null): string[] {
   return raisonAbsence ? QUESTIONS_PAR_RAISON[raisonAbsence] : QUESTIONS_GENERIQUES
 }
 
-function messagePromoSansRang(promo: Promo): string {
+function messagePromo(promo: Promo): string {
   const installation = promo.date_installation ? `installation le ${promo.date_installation}, ` : ''
   const prefixe = promo.op_trade ? '[OP Trade] ' : ''
   return `${prefixe}Promo "${promo.mecanique}" chez ${promo.enseigne} : ${installation}vente le ${promo.date_debut_vente}.`
@@ -77,30 +77,33 @@ function messagePromoSansRang(promo: Promo): string {
 function construireArgumentaire(
   typologie: Typologie | null,
   magasin: Magasin,
-  raisons: string[],
+  presentsChezComparables: { total: number; presents: number },
   promoInfo: ReturnType<typeof promoPrincipale>,
   vmh: { vmh: number | null; dv: number | null } | null,
   raisonAbsence: RaisonAbsence | null,
-  action: ActionRecommandee
+  action: ActionRecommandee,
+  statutDisponibilite: StatutDisponibilite
 ): string {
   if (action === 'aucune_action_commande') {
-    return 'Produit non commandable actuellement — aucune action de commande possible.'
+    const raison = statutDisponibilite === 'arret_industriel' ? 'arrêt industriel' : 'déréférencé'
+    return `Produit non commandable actuellement (${raison}) — aucune action de commande possible.`
   }
 
   const phrases: string[] = []
   if (typologie === 'obligatoire') {
     phrases.push(`Référencement obligatoire chez ${magasin.enseigne} — son absence est un écart à signaler en priorité.`)
   }
-  if (raisons.length > 0) {
-    phrases.push(...raisons)
-  } else if (promoInfo) {
-    phrases.push(messagePromoSansRang(promoInfo.promo))
+  if (presentsChezComparables.presents > 0) {
+    phrases.push(`Présent dans ${presentsChezComparables.presents} magasin(s) similaire(s) sur ${presentsChezComparables.total}.`)
+  }
+  if (promoInfo) {
+    phrases.push(messagePromo(promoInfo.promo))
   }
   if (vmh && (vmh.vmh !== null || vmh.dv !== null)) {
     const formatLabel = magasin.taille === 'hyper' ? 'hypers' : magasin.taille === 'super' ? 'supers' : 'magasins'
     const parts: string[] = []
     if (vmh.vmh !== null) parts.push(`tourne à ${vmh.vmh.toFixed(1)} unités/semaine en moyenne`)
-    if (vmh.dv !== null) parts.push(`est référencé par ${vmh.dv.toFixed(0)} % des ${formatLabel} au national`)
+    if (vmh.dv !== null) parts.push(`est référencé par ${vmh.dv.toFixed(0)} % des ${formatLabel}`)
     if (parts.length > 0) phrases.push(`Au national, ce produit ${parts.join(' et ')}.`)
   }
   if (raisonAbsence) {
@@ -136,7 +139,7 @@ export function produitATravailler(
 
   const vmh = vmhPertinent(magasin, vmhNational)
   const action = actionRecommandee(statutDisponibilite, promoInfo?.stade ?? null, statutProduitMagasin)
-  const argumentaire = construireArgumentaire(typologie, magasin, importance?.raisons ?? [], promoInfo, vmh, raisonAbsence, action)
+  const argumentaire = construireArgumentaire(typologie, magasin, importance?.presentsChezComparables ?? { total: 0, presents: 0 }, promoInfo, vmh, raisonAbsence, action, statutDisponibilite)
 
   return {
     produit,

@@ -23,7 +23,7 @@ export default async function FicheMagasinPage({ params }: { params: Promise<{ i
     supabase.from('statuts_produit_magasin').select('*').eq('magasin_id', magasin.id),
     supabase.from('pdl_magasin').select('*').eq('magasin_id', magasin.id).maybeSingle(),
     supabase.from('produits_enseigne').select('*').eq('enseigne', magasin.enseigne),
-    supabase.from('promo_produits').select('produit_id, promos(*)'),
+    supabase.from('promo_produits').select('produit_id, promos!inner(*)').eq('promos.enseigne', magasin.enseigne),
   ])
 
   const statutParProduit = new Map((statuts ?? []).map(s => [s.produit_id, s.statut as StatutProduit]))

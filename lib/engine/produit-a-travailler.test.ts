@@ -100,4 +100,17 @@ describe('produitATravailler', () => {
     )
     expect(result.argumentaire).toMatch(/→ .+, à valider au prochain passage\.$/)
   })
+
+  it('couvre les 5 valeurs de raisonAbsence avec des questions de découverte non vides', () => {
+    const raisons: Array<'pas_de_place_rayon' | 'frein_prix' | 'jamais_reference' | 'concurrence_privilegiee' | 'autre'> = [
+      'pas_de_place_rayon', 'frein_prix', 'jamais_reference', 'concurrence_privilegiee', 'autre',
+    ]
+    for (const raison of raisons) {
+      const result = produitATravailler(
+        magasin(), produit, 20, null, 'manquant', raison, 'commandable',
+        [], new Map(), [], null, 'les_deux', null
+      )
+      expect(result.questionsDecouverte.length).toBeGreaterThan(0)
+    }
+  })
 })
