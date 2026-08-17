@@ -1,5 +1,6 @@
 'use client'
 import { useState, useTransition } from 'react'
+import Link from 'next/link'
 import { planifierVisite, marquerRealisee, retirerVisite } from '@/lib/visites/actions'
 import { dateDuJour } from '@/lib/semaine'
 import type { Magasin, Visite } from '@/lib/types'
@@ -54,7 +55,7 @@ export function CalendrierSemaine({ semaine, magasins, visites }: { semaine: str
             <h2 className="font-semibold text-sm mb-2">{jour}</h2>
             {visites.filter(v => v.jour === dateDuJour(semaine, i)).map(v => (
               <div key={v.id} className="text-xs border-b py-1">
-                <p>{magasinParId.get(v.magasin_id)?.nom}</p>
+                <p><Link href={`/magasins/${v.magasin_id}`} className="underline">{magasinParId.get(v.magasin_id)?.nom}</Link></p>
                 <p className="text-gray-500">{v.statut}</p>
                 {v.statut === 'planifie' && (
                   <button disabled={pending} onClick={() => handleMarquerRealisee(v.id)} className="underline mr-2">
