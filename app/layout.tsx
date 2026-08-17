@@ -45,6 +45,7 @@ export default async function RootLayout({
             {profile.role === "admin" && (
               <>
                 <Link href="/admin/import">Import</Link>
+                <Link href="/admin/produits">Produits</Link>
                 <Link href="/admin/utilisateurs">Utilisateurs</Link>
               </>
             )}

@@ -27,11 +27,24 @@ export interface Produit {
   code: string
   nom: string
   categorie: string | null
+  marque?: string | null
+  gamme?: string | null
+  parfum?: string | null
+  format?: string | null
 }
 
 export interface PrioriteProduit {
   produit_id: string
   rang: 20 | 50 | 70
+}
+
+export const ENSEIGNES = ['Auchan', 'Carrefour', 'Carrefour Market', 'Intermarche', 'Leclerc', 'U'] as const
+export type Enseigne = (typeof ENSEIGNES)[number]
+
+export interface ProduitEnseigne {
+  produit_id: string
+  enseigne: string
+  typologie: string | null
 }
 
 export interface Promo {

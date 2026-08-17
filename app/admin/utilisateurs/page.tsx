@@ -1,5 +1,6 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { UtilisateurForm } from './utilisateur-form'
+import { UtilisateurRow } from './utilisateur-row'
 
 export default async function UtilisateursPage() {
   const supabase = createServerClient()
@@ -12,14 +13,10 @@ export default async function UtilisateursPage() {
       <h1 className="text-xl font-bold">Utilisateurs</h1>
       <UtilisateurForm secteurs={secteurs ?? []} managers={managers} />
       <table className="w-full text-sm">
-        <thead><tr><th className="text-left">Email</th><th className="text-left">Rôle</th><th className="text-left">Secteur</th></tr></thead>
+        <thead><tr><th className="text-left">Email</th><th className="text-left">Rôle</th><th className="text-left">Secteur</th><th className="text-left">Manager</th><th></th></tr></thead>
         <tbody>
           {(profiles ?? []).map(p => (
-            <tr key={p.id}>
-              <td>{p.email}</td>
-              <td>{p.role}</td>
-              <td>{secteurs?.find(s => s.id === p.secteur_id)?.nom ?? '-'}</td>
-            </tr>
+            <UtilisateurRow key={p.id} profile={p} secteurs={secteurs ?? []} managers={managers} />
           ))}
         </tbody>
       </table>
