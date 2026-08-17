@@ -17,9 +17,9 @@ describe('séparation priorité hebdomadaire vs importance fiche magasin', () =>
     const produitsParId = new Map([['p1', produit]])
 
     const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
-      { magasin_id: '2', produit_id: 'p1', statut: 'present', signale_par: null, signale_at: '' },
-      { magasin_id: '3', produit_id: 'p1', statut: 'present', signale_par: null, signale_at: '' },
+      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '', raison_absence: null },
+      { magasin_id: '2', produit_id: 'p1', statut: 'present', signale_par: null, signale_at: '', raison_absence: null },
+      { magasin_id: '3', produit_id: 'p1', statut: 'present', signale_par: null, signale_at: '', raison_absence: null },
     ]
 
     // Priorité de la semaine : ni promo ni rupture, donc jamais remonté ici,

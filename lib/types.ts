@@ -79,7 +79,7 @@ export interface StatutProduitMagasin {
   statut: StatutProduit
   signale_par: string | null
   signale_at: string
-  raison_absence?: RaisonAbsence | null
+  raison_absence: RaisonAbsence | null
 }
 
 export type StatutVisite = 'planifie' | 'realise'

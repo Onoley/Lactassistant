@@ -18,7 +18,7 @@ describe('prioritesSemaine', () => {
   it('ignore un Top 20 sans promo ni rupture (aucune donnée de rang ne lui est même fournie)', () => {
     const mag = magasin('1')
     const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
+      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '', raison_absence: null },
     ]
     const result = prioritesSemaine([mag], statuts, produitsParId, [], new Map())
     expect(result).toHaveLength(0)
@@ -27,7 +27,7 @@ describe('prioritesSemaine', () => {
   it('une rupture sans promo associée apparaît avec un niveau cette_semaine minimum', () => {
     const mag = magasin('1')
     const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '' },
+      { magasin_id: '1', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '', raison_absence: null },
     ]
     const result = prioritesSemaine([mag], statuts, produitsParId, [], new Map(), new Date('2026-08-17'))
     expect(result).toHaveLength(1)
@@ -38,7 +38,7 @@ describe('prioritesSemaine', () => {
   it('une promo OP Trade sur un produit manquant déclenche un niveau urgent', () => {
     const mag = magasin('1')
     const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
+      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '', raison_absence: null },
     ]
     const promoOpTrade = promo({ op_trade: 'OP LAITIERS', date_installation: '2026-12-01', date_debut_vente: '2026-12-10' })
     const promosParProduitId = new Map<string, Promo[]>([['p1', [promoOpTrade]]])
@@ -61,7 +61,7 @@ describe('prioritesSemaine', () => {
   it("stade constater : absent si la promo n'est pas OP Trade et que le produit est present", () => {
     const mag = magasin('1')
     const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'present', signale_par: null, signale_at: '' },
+      { magasin_id: '1', produit_id: 'p1', statut: 'present', signale_par: null, signale_at: '', raison_absence: null },
     ]
     const promoTerminee = promo({ date_installation: '2026-06-01', date_debut_vente: '2026-06-10', date_fin_vente: '2026-06-30' })
     const promosParProduitId = new Map<string, Promo[]>([['p1', [promoTerminee]]])
@@ -72,7 +72,7 @@ describe('prioritesSemaine', () => {
   it('stade constater : présent si le produit est toujours manquant, avec le message dédié', () => {
     const mag = magasin('1')
     const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
+      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '', raison_absence: null },
     ]
     const promoTerminee = promo({ date_installation: '2026-06-01', date_debut_vente: '2026-06-10', date_fin_vente: '2026-06-30' })
     const promosParProduitId = new Map<string, Promo[]>([['p1', [promoTerminee]]])
@@ -85,7 +85,7 @@ describe('prioritesSemaine', () => {
   it("à constater, une promo OP Trade reste urgente même terminée depuis longtemps — seules les OP Trade restent urgentes une fois la promo passée", () => {
     const mag = magasin('1')
     const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
+      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '', raison_absence: null },
     ]
     const promoOpTradeTerminee = promo({
       op_trade: 'OP LAITIERS', date_installation: '2026-06-01', date_debut_vente: '2026-06-10', date_fin_vente: '2026-06-30',
@@ -100,7 +100,7 @@ describe('prioritesSemaine', () => {
   it("applique le statut_disponibilite de produits_enseigne pour verrouiller l'action recommandée", () => {
     const mag = magasin('1')
     const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '' },
+      { magasin_id: '1', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '', raison_absence: null },
     ]
     const produitsEnseigne: ProduitEnseigne[] = [
       { produit_id: 'p1', enseigne: 'Carrefour', typologie: null, statut_disponibilite: 'arret_industriel' },
@@ -113,7 +113,7 @@ describe('prioritesSemaine', () => {
   it("signale l'échéance dépassée plutôt que 'dans 0 jour(s)' pour une promo sans date_fin_vente restée en controler bien après le début de vente", () => {
     const mag = magasin('1')
     const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
+      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '', raison_absence: null },
     ]
     const promoSansFin = promo({ date_installation: '2026-05-20', date_debut_vente: '2026-06-01', date_fin_vente: null })
     const promosParProduitId = new Map<string, Promo[]>([['p1', [promoSansFin]]])
@@ -129,8 +129,8 @@ describe('prioritesSemaine', () => {
     const magCarrefour = magasin('1', { enseigne: 'Carrefour' })
     const magLeclerc = magasin('2', { enseigne: 'Leclerc' })
     const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '' },
-      { magasin_id: '2', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '' },
+      { magasin_id: '1', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '', raison_absence: null },
+      { magasin_id: '2', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '', raison_absence: null },
     ]
     const produitsEnseigne: ProduitEnseigne[] = [
       { produit_id: 'p1', enseigne: 'Carrefour', typologie: null, statut_disponibilite: 'non_commandable' },
@@ -148,8 +148,8 @@ describe('prioritesSemaine', () => {
     const magA = magasin('1', { secteur_id: 'a' })
     const magB = magasin('2', { secteur_id: 'b' })
     const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '' },
-      { magasin_id: '2', produit_id: 'p2', statut: 'rupture', signale_par: null, signale_at: '' },
+      { magasin_id: '1', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '', raison_absence: null },
+      { magasin_id: '2', produit_id: 'p2', statut: 'rupture', signale_par: null, signale_at: '', raison_absence: null },
     ]
     const result = prioritesSemaine([magA, magB], statuts, produitsParId, [], new Map(), new Date('2026-08-17'))
     expect(result).toHaveLength(2)
