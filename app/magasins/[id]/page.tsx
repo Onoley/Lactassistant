@@ -1,9 +1,12 @@
-import { Fragment } from 'react'
 import { notFound, redirect } from 'next/navigation'
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
-import type { StatutProduit } from '@/lib/types'
-import { chargerArgumentsFicheMagasin } from '@/lib/engine/fiche-magasin'
-import { StatutSelect } from './statut-select'
+import type { Produit, Promo, StatutProduit } from '@/lib/types'
+import { chargerProduitsATravailler } from '@/lib/engine/fiche-magasin'
+import { prioritesSemaine } from '@/lib/engine/priorites'
+import { PdlBloc } from './pdl-bloc'
+import { PrioritesMagasin } from './priorites-magasin'
+import { ProduitATravaillerCarte } from './produit-a-travailler-carte'
+import { AssortimentTable } from './assortiment-table'
 
 export default async function FicheMagasinPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -15,55 +18,65 @@ export default async function FicheMagasinPage({ params }: { params: Promise<{ i
   const { data: magasin } = await supabase.from('magasins').select('*').eq('id', id).single()
   if (!magasin) notFound()
 
-  const { data: produits } = await supabase.from('produits').select('*').order('nom')
-  const { data: statuts } = await supabase.from('statuts_produit_magasin').select('*').eq('magasin_id', magasin.id)
+  const [{ data: produits }, { data: statuts }, { data: pdl }, { data: produitsEnseigne }, { data: promoLiens }] = await Promise.all([
+    supabase.from('produits').select('*').order('nom'),
+    supabase.from('statuts_produit_magasin').select('*').eq('magasin_id', magasin.id),
+    supabase.from('pdl_magasin').select('*').eq('magasin_id', magasin.id).maybeSingle(),
+    supabase.from('produits_enseigne').select('*').eq('enseigne', magasin.enseigne),
+    supabase.from('promo_produits').select('produit_id, promos(*)'),
+  ])
+
   const statutParProduit = new Map((statuts ?? []).map(s => [s.produit_id, s.statut as StatutProduit]))
+  const produitsParId = new Map<string, Produit>((produits ?? []).map(p => [p.id, p]))
+  const promosParProduitId = new Map<string, Promo[]>()
+  for (const lien of promoLiens ?? []) {
+    const liste = promosParProduitId.get(lien.produit_id) ?? []
+    liste.push(lien.promos as unknown as Promo)
+    promosParProduitId.set(lien.produit_id, liste)
+  }
 
-  // Trié par importance décroissante (rang Top70, magasins comparables,
-  // promo) — les manquants les plus importants à pousser apparaissent en
-  // premier.
-  const lignesImportance = await chargerArgumentsFicheMagasin(magasin.id)
-  const importanceParProduit = new Map(lignesImportance.map(l => [l.produitId, l]))
-  const idsManquants = new Set(lignesImportance.map(l => l.produitId))
-  const produitsParId = new Map((produits ?? []).map(p => [p.id, p]))
-
-  const produitsTries = [
-    ...lignesImportance.map(l => produitsParId.get(l.produitId)).filter((p): p is NonNullable<typeof p> => Boolean(p)),
-    ...(produits ?? []).filter(p => !idsManquants.has(p.id)),
-  ]
+  const produitsATravailler = await chargerProduitsATravailler(magasin.id)
+  const prioritesHebdo = prioritesSemaine(
+    [magasin], statuts ?? [], produitsParId, produitsEnseigne ?? [], promosParProduitId
+  )
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-xl font-bold">{magasin.nom} — {magasin.enseigne}</h1>
-      <p className="text-sm text-gray-600">{magasin.adresse}</p>
-      {magasin.contact_nom && (
-        <p className="text-sm">Contact : {magasin.contact_nom} — {magasin.contact_telephone} — {magasin.contact_email}</p>
-      )}
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-xl font-bold">{magasin.nom} — {magasin.enseigne}</h1>
+        <p className="text-sm text-gray-600">{magasin.adresse}</p>
+        {magasin.contact_nom && (
+          <p className="text-sm">Contact : {magasin.contact_nom} — {magasin.contact_telephone} — {magasin.contact_email}</p>
+        )}
+      </div>
 
-      <table className="w-full text-sm">
-        <thead><tr><th className="text-left">Produit</th><th className="text-left">Statut</th></tr></thead>
-        <tbody>
-          {produitsTries.map(p => (
-            <Fragment key={p.id}>
-              <tr>
-                <td>{p.nom}</td>
-                <td>
-                  <StatutSelect
-                    magasinId={magasin.id}
-                    produitId={p.id}
-                    statutActuel={statutParProduit.get(p.id) ?? 'present'}
-                  />
-                </td>
-              </tr>
-              {importanceParProduit.get(p.id)?.raisons.map((raison, i) => (
-                <tr key={`${p.id}-raison-${i}`}>
-                  <td colSpan={2} className="text-sm text-amber-700 pl-4">{raison}</td>
-                </tr>
-              ))}
-            </Fragment>
-          ))}
-        </tbody>
-      </table>
+      <PdlBloc
+        magasinId={magasin.id}
+        pdl={{
+          pdl_generale: pdl?.pdl_generale ?? null,
+          pdl_yaos: pdl?.pdl_yaos ?? null,
+          pdl_siggis: pdl?.pdl_siggis ?? null,
+          pdl_dessert: pdl?.pdl_dessert ?? null,
+        }}
+      />
+
+      <PrioritesMagasin priorites={prioritesHebdo} />
+
+      <div className="space-y-3">
+        <h2 className="font-semibold">Produits manquants à travailler</h2>
+        {produitsATravailler.length === 0 ? (
+          <p className="text-sm text-gray-500">Aucun produit manquant à travailler pour ce magasin.</p>
+        ) : (
+          produitsATravailler.map(item => (
+            <ProduitATravaillerCarte key={item.produit.id} magasinId={magasin.id} item={item} />
+          ))
+        )}
+      </div>
+
+      <div>
+        <h2 className="font-semibold mb-2">Assortiment</h2>
+        <AssortimentTable magasinId={magasin.id} produits={produits ?? []} statutParProduit={statutParProduit} />
+      </div>
     </div>
   )
 }
