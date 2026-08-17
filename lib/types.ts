@@ -41,10 +41,13 @@ export interface PrioriteProduit {
 export const ENSEIGNES = ['Auchan', 'Carrefour', 'Carrefour Market', 'Intermarche', 'Leclerc', 'U'] as const
 export type Enseigne = (typeof ENSEIGNES)[number]
 
+export type StatutDisponibilite = 'commandable' | 'non_commandable' | 'arret_industriel' | 'en_attente_referencement'
+
 export interface ProduitEnseigne {
   produit_id: string
   enseigne: string
   typologie: string | null
+  statut_disponibilite: StatutDisponibilite
 }
 
 export interface Promo {
