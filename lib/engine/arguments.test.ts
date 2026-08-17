@@ -65,4 +65,24 @@ describe('genererArguments', () => {
     expect(args[0].message).toContain('vente le 2026-08-20')
     expect(score).toBe(scoreRangProduit(20) + 100)
   })
+
+  it('le signal magasins similaires contribue aussi au score, pas seulement au message', () => {
+    const cible = magasin('1')
+    const tous = [cible, magasin('2')]
+    const statuts = new Map<string, StatutProduit>([['2', 'present']])
+    const { score } = genererArguments(cible, produit, 70, tous, statuts, [], 'les_deux')
+    expect(score).toBeGreaterThan(scoreRangProduit(70))
+  })
+
+  it('une promo OP Trade fait dominer le score, même pour un rang faible', () => {
+    const cible = magasin('1', { enseigne: 'Carrefour' })
+    const promoOpTrade: Promo = {
+      id: 'pr1', code: 'PR1', enseigne: 'Carrefour', mecanique: '-20%',
+      date_installation: null, date_debut_vente: '2026-12-01', date_constat: null,
+      op_trade: 'OP PRODUITS LAITIERS',
+    }
+    const { arguments: args, score } = genererArguments(cible, produit, 70, [cible], new Map(), [promoOpTrade], 'les_deux')
+    expect(score).toBeGreaterThan(900)
+    expect(args.some(a => a.message.startsWith('[OP Trade]'))).toBe(true)
+  })
 })

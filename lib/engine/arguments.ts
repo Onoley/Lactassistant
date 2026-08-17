@@ -1,6 +1,6 @@
 import type { Magasin, Produit, Promo, StatutProduit } from '@/lib/types'
 import { magasinsSimilaires, type CritereSimilarite } from './similarity'
-import { scoreRangProduit, scoreUrgencePromoJalons, type Rang } from './scoring'
+import { SCORE_OP_TRADE, scoreMagasinsSimilaires, scoreRangProduit, scoreUrgencePromoJalons, type Rang } from './scoring'
 
 export interface Argument {
   type: 'magasins_similaires' | 'promo'
@@ -29,18 +29,24 @@ export function genererArguments(
   }
 
   const promosScoped = promosDuProduit.filter(p => p.enseigne === magasin.enseigne)
+  const objectivee = promosScoped.some(p => p.op_trade)
 
   for (const promo of promosScoped) {
     const installation = promo.date_installation ? `installation le ${promo.date_installation}, ` : ''
+    const prefixe = promo.op_trade ? '[OP Trade] ' : ''
     args.push({
       type: 'promo',
-      message: `Promo "${promo.mecanique}" chez ${promo.enseigne} : ${installation}vente le ${promo.date_debut_vente}.`,
+      message: `${prefixe}Promo "${promo.mecanique}" chez ${promo.enseigne} : ${installation}vente le ${promo.date_debut_vente}.`,
     })
   }
 
-  const score = promosScoped.length > 0
-    ? Math.max(...promosScoped.map(p => scoreRangProduit(rang) + scoreUrgencePromoJalons([p.date_installation, p.date_debut_vente, p.date_constat], aujourdHui)))
-    : scoreRangProduit(rang)
+  const scorePromo = promosScoped.length > 0
+    ? Math.max(...promosScoped.map(p => scoreUrgencePromoJalons([p.date_installation, p.date_debut_vente, p.date_constat], aujourdHui)))
+    : 0
+  const scoreSimilaires = scoreMagasinsSimilaires(presentsChezSimilaires.length, similaires.length)
+
+  let score = scoreRangProduit(rang) + scorePromo + scoreSimilaires
+  if (objectivee) score += SCORE_OP_TRADE
 
   return { arguments: args, score }
 }

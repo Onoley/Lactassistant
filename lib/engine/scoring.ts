@@ -25,3 +25,18 @@ export function scoreUrgencePromoJalons(dates: Array<string | null | undefined>,
   if (connues.length === 0) return 0
   return Math.max(...connues.map(d => scoreUrgenceDate(d, aujourdHui)))
 }
+
+// Une promo "OP Trade" est un objectif business explicite pour les
+// commerciaux : elle doit dominer tout autre score (rang + urgence +
+// magasins similaires plafonne autour de 250) pour forcer sa remontée en
+// tête de liste, quel que soit le rang du produit.
+export const SCORE_OP_TRADE = 1000
+
+// Poids maximal du signal "présent chez des magasins similaires" — pondéré
+// par la proportion de magasins similaires qui l'ont déjà en rayon.
+export const SCORE_MAGASINS_SIMILAIRES_MAX = 50
+
+export function scoreMagasinsSimilaires(nbPresents: number, nbSimilaires: number): number {
+  if (nbSimilaires === 0 || nbPresents === 0) return 0
+  return Math.round(SCORE_MAGASINS_SIMILAIRES_MAX * (nbPresents / nbSimilaires))
+}

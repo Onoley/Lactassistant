@@ -19,8 +19,17 @@ export default async function FicheMagasinPage({ params }: { params: Promise<{ i
   const { data: statuts } = await supabase.from('statuts_produit_magasin').select('*').eq('magasin_id', magasin.id)
   const statutParProduit = new Map((statuts ?? []).map(s => [s.produit_id, s.statut as StatutProduit]))
 
+  // Trié par score décroissant (urgence, OP Trade, magasins similaires) —
+  // les manquants les plus prioritaires apparaissent en premier.
   const lignesAvecArguments = await chargerArgumentsFicheMagasin(magasin.id)
   const argumentsParProduit = new Map(lignesAvecArguments.map(l => [l.produitId, l]))
+  const idsManquants = new Set(lignesAvecArguments.map(l => l.produitId))
+  const produitsParId = new Map((produits ?? []).map(p => [p.id, p]))
+
+  const produitsTries = [
+    ...lignesAvecArguments.map(l => produitsParId.get(l.produitId)).filter((p): p is NonNullable<typeof p> => Boolean(p)),
+    ...(produits ?? []).filter(p => !idsManquants.has(p.id)),
+  ]
 
   return (
     <div className="p-6 space-y-4">
@@ -33,7 +42,7 @@ export default async function FicheMagasinPage({ params }: { params: Promise<{ i
       <table className="w-full text-sm">
         <thead><tr><th className="text-left">Produit</th><th className="text-left">Statut</th></tr></thead>
         <tbody>
-          {(produits ?? []).map(p => (
+          {produitsTries.map(p => (
             <Fragment key={p.id}>
               <tr>
                 <td>{p.nom}</td>

@@ -1,4 +1,3 @@
-import { createAdminClient } from '@/lib/supabase/admin'
 import { createServerClient } from '@/lib/supabase/server'
 import { genererArguments, type Argument } from './arguments'
 import type { CritereSimilarite } from './similarity'
@@ -32,13 +31,15 @@ export async function chargerArgumentsFicheMagasin(
   })
   if (manquants.length === 0) return []
 
-  // Lecture parc entier via client admin : nécessaire pour comparer avec des
-  // magasins hors du secteur du commercial connecté (RLS ne l'autoriserait pas).
-  const admin = createAdminClient()
-  const { data: tousLesMagasins } = await admin.from('magasins').select('*')
-  const { data: tousLesStatuts } = await admin
+  // Comparaison "magasins similaires" limitée au secteur du magasin consulté
+  // (pas au parc national) — RLS autorise déjà un commercial/manager à lire
+  // les autres magasins et statuts de son propre secteur, pas besoin du
+  // client admin ici.
+  const { data: magasinsSecteur } = await supabase.from('magasins').select('*').eq('secteur_id', magasin.secteur_id)
+  const { data: statutsSecteur } = await supabase
     .from('statuts_produit_magasin')
     .select('*')
+    .in('magasin_id', (magasinsSecteur ?? []).map(m => m.id))
     .in('produit_id', manquants.map(p => p.id))
   const { data: promoLiens } = await supabase
     .from('promo_produits')
@@ -52,21 +53,23 @@ export async function chargerArgumentsFicheMagasin(
     promosParProduit.set(lien.produit_id, liste)
   }
 
-  return manquants.map(produit => {
-    const priorite = prioriteParProduit.get(produit.id)
-    const statut = statutParProduit.get(produit.id)!
-    if (!priorite) return { produitId: produit.id, produitNom: produit.nom, statut, arguments: [], score: 0 }
+  return manquants
+    .map(produit => {
+      const priorite = prioriteParProduit.get(produit.id)
+      const statut = statutParProduit.get(produit.id)!
+      if (!priorite) return { produitId: produit.id, produitNom: produit.nom, statut, arguments: [], score: 0 }
 
-    const statutsPourCeProduit = new Map<string, StatutProduit>(
-      (tousLesStatuts ?? []).filter(s => s.produit_id === produit.id).map(s => [s.magasin_id, s.statut as StatutProduit])
-    )
+      const statutsPourCeProduit = new Map<string, StatutProduit>(
+        (statutsSecteur ?? []).filter(s => s.produit_id === produit.id).map(s => [s.magasin_id, s.statut as StatutProduit])
+      )
 
-    const { arguments: args, score } = genererArguments(
-      magasin, produit, priorite.rang as 20 | 50 | 70,
-      tousLesMagasins ?? [], statutsPourCeProduit,
-      promosParProduit.get(produit.id) ?? [], critere
-    )
+      const { arguments: args, score } = genererArguments(
+        magasin, produit, priorite.rang as 20 | 50 | 70,
+        magasinsSecteur ?? [], statutsPourCeProduit,
+        promosParProduit.get(produit.id) ?? [], critere
+      )
 
-    return { produitId: produit.id, produitNom: produit.nom, statut, arguments: args, score }
-  })
+      return { produitId: produit.id, produitNom: produit.nom, statut, arguments: args, score }
+    })
+    .sort((a, b) => b.score - a.score)
 }
