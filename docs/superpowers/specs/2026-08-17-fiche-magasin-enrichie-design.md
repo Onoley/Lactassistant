@@ -68,6 +68,44 @@ Colonnes source → destination (onglet "Vision CAT", index 0-based dans la lign
 
 Import : nouvel onglet sur la page `/admin/import` existante, réutilisant le pipeline `lib/import/parser.ts` + un nouveau mapper dédié (le fichier a une structure différente des imports existants : ligne d'en-tête à la ligne 4, pas de ligne 1). Lignes sans EAN ou dont l'EAN ne correspond à aucun `produits.code` sont ignorées silencieusement (comportement upsert par EAN, comme les imports existants).
 
+### 3.3 PDL magasin (part de linéaire)
+
+Nouvelle table, un enregistrement par magasin, saisi et mis à jour librement par le commercial depuis la fiche magasin — tous les champs sont optionnels, aucun ne bloque l'enregistrement des autres :
+
+```sql
+create table pdl_magasin (
+  magasin_id uuid primary key references magasins(id) on delete cascade,
+  pdl_generale numeric,   -- PDL globale LNUF dans le magasin
+  pdl_yaos numeric,
+  pdl_siggis numeric,
+  pdl_dessert numeric,    -- segment Dessert : Viennois + La Laitière combinés
+  updated_at timestamptz not null default now(),
+  updated_by uuid references profiles(id)
+);
+
+alter table pdl_magasin enable row level security;
+create policy "pdl_magasin_select_visible" on pdl_magasin for select
+  using (magasin_id in (select id from magasins where secteur_id in (select visible_secteurs())));
+create policy "pdl_magasin_write_visible" on pdl_magasin for all
+  using (magasin_id in (select id from magasins where secteur_id in (select visible_secteurs())));
+```
+
+Valeurs en pourcentage (0-100), saisie libre (pas de contrainte de plage en base — un commercial peut vouloir noter une estimation approximative). Nouvelle server action `definirPdl(magasinId, champ, valeur)`. Affiché et éditable dans la fiche magasin, pas dans le calcul du moteur pour ce sous-projet (donnée de suivi/comparaison manuelle, pas encore un signal automatisé — cohérent avec la demande : *"c'est toujours des données en plus à pouvoir comparer"*, pas une exigence de calcul immédiat).
+
+### 3.4 Typologie obligatoire / picking
+
+Réutilise la colonne `produits_enseigne.typologie` (existante depuis la migration `0002`, jamais encore exploitée). Convention de valeur figée pour ce sous-projet :
+
+```
+typologie ∈ { 'obligatoire', 'picking' } | null
+```
+
+- `'obligatoire'` : l'enseigne impose ce produit dans tous ses magasins (référencement national/central) — un magasin qui ne l'a pas est en écart de conformité, pas un simple choix.
+- `'picking'` : l'enseigne laisse le magasin choisir librement dans la gamme — un magasin qui ne l'a pas n'est pas en tort.
+- `null` (valeur par défaut actuelle, inchangée) : distinction non renseignée pour cette enseigne — traité comme `'picking'` par le moteur (comportement actuel préservé, aucune régression sur les enseignes où l'admin n'aura pas encore renseigné cette donnée).
+
+Édition : sélecteur ajouté sur `/admin/produits`, dans la même cellule que la case à cocher d'assortiment et le sélecteur `statut_disponibilite` du sous-projet 1 (visible seulement quand l'enseigne est cochée).
+
 ## 4. Découpage du moteur
 
 ### 4.1 `produitATravailler` — nouvelle fonction de composition
@@ -78,11 +116,12 @@ Nouveau fichier `lib/engine/produit-a-travailler.ts`. Ne rouvre pas `importanceP
 export interface ProduitATravailler {
   produit: Produit
   rang: 20 | 50 | 70 | null
+  typologie: 'obligatoire' | 'picking' | null
   raisons: string[]              // reprend ImportanceProduit.raisons
   presentsChezComparables: { total: number; presents: number }
   vmhNational: { vmh: number | null; dv: number | null } | null  // null si aucune ligne vmh_national pour ce produit
   raisonAbsence: string | null
-  argumentaire: string            // phrase factuelle, croise comparables + promo + VMH (si dispo) + raison d'absence
+  argumentaire: string            // phrase factuelle, croise comparables + promo + VMH (si dispo) + raison d'absence + typologie
   questionsDecouverte: string[]   // 2-4 questions, selon raisonAbsence, génériques si raisonAbsence est null
   actionRecommandee: ActionRecommandee
   momentum: 'urgent' | 'cette_semaine' | 'a_anticiper' | null  // niveau si ce produit est aussi dans prioritesSemaine pour ce magasin, sinon null
@@ -92,6 +131,7 @@ export function produitATravailler(
   magasin: Magasin,
   produit: Produit,
   rang: Rang | null,
+  typologie: 'obligatoire' | 'picking' | null,
   statutProduitMagasin: StatutProduit,
   raisonAbsence: string | null,
   statutDisponibilite: StatutDisponibilite,
@@ -105,7 +145,7 @@ export function produitATravailler(
 ): ProduitATravailler
 ```
 
-Note : `rang` peut être `null` (un produit manquant sans priorité Top20/50/70 assignée existe déjà dans le moteur actuel — `chargerArgumentsFicheMagasin` retourne une ligne à score 0 dans ce cas). Quand `rang` est `null`, `importanceProduitFiche` n'est pas appelable (elle exige un `Rang`) — dans ce cas, `raisons`/`presentsChezComparables` restent vides/nulles et l'argumentaire se limite aux signaux disponibles (promo, VMH, raison d'absence).
+Note : `rang` peut être `null` (un produit manquant sans priorité Top20/50/70 assignée existe déjà dans le moteur actuel — `chargerArgumentsFicheMagasin` retourne une ligne à score 0 dans ce cas). Quand `rang` est `null`, `importanceProduitFiche` n'est pas appelable (elle exige un `Rang`) — dans ce cas, `raisons`/`presentsChezComparables` restent vides/nulles et l'argumentaire se limite aux signaux disponibles (promo, VMH, raison d'absence, typologie).
 
 ### 4.2 Sélection du VMH par format
 
@@ -122,13 +162,14 @@ function vmhPertinent(magasin: Magasin, vmhNational: {...} | null): { vmh: numbe
 
 Phrase factuelle unique, construite en enchaînant les signaux disponibles (jamais de garantie de performance — toujours "justifie de tester/proposer", jamais "va bien se vendre") :
 
+- Si `typologie === 'obligatoire'` : ouverture systématique par le rappel de conformité, avant tout autre signal — *"Référencement obligatoire chez [enseigne] — son absence est un écart à signaler en priorité."* (ton différent du reste : ce n'est pas une proposition, c'est un manquement à corriger).
 - Base comparables (reprend `raisons` d'`importanceProduitFiche` si non vide) : *"Présent chez X/Y magasins comparables du secteur"*.
 - + VMH national si disponible : *"— au national, ce produit tourne à Z unités/semaine en moyenne dans les [hypers|supers] et est référencé par W % d'entre eux"*.
 - + Promo si présente : reprend le format déjà utilisé par `prioritesSemaine`/`importanceProduitFiche` (mécanique, enseigne, échéance).
 - + Raison d'absence si connue : *"Frein identifié : [libellé lisible de la raison]."*
 - Conclusion toujours actionnable et datée quand une action recommandée existe : *"→ [libellé de l'action recommandée], à valider au prochain passage."*
 
-Si `actionRecommandee === 'aucune_action_commande'` (verrou non commandable), l'argumentaire ne propose jamais de commande — il explique pourquoi : *"Produit non commandable actuellement ([arrêt industriel|déréférencé]) — aucune action de commande possible."*
+Si `actionRecommandee === 'aucune_action_commande'` (verrou non commandable), l'argumentaire ne propose jamais de commande — il explique pourquoi : *"Produit non commandable actuellement ([arrêt industriel|déréférencé]) — aucune action de commande possible."* (prioritaire sur la phrase d'ouverture "obligatoire" : un produit non commandable ne peut de toute façon pas être corrigé par une commande, même s'il est censé être obligatoire).
 
 ### 4.4 Générateur de questions de découverte
 
@@ -164,9 +205,10 @@ const QUESTIONS_GENERIQUES = [
 
 ## 5. Fiche magasin — nouvelle structure (`app/magasins/[id]/page.tsx`)
 
-1. **En haut : "Priorités de ce magasin"** — `prioritesSemaine(...)` filtré sur `p.magasin.id === magasin.id`. Chaque entrée : pastille de niveau colorée (réutilise `COULEUR_NIVEAU`/`LIBELLE_NIVEAU` de `components/priorites-liste.tsx` — ces deux constantes ne sont actuellement pas exportées de ce fichier, il faut ajouter `export` devant les deux, changement mineur inclus dans ce sous-projet), magasin/produit, et un bouton "Voir les raisons" qui déplie la raison complète (état local, replié par défaut — reste compact).
-2. **Ensuite : "Produits manquants à travailler"** — une carte par produit avec `statut ∈ {manquant, rupture}`, triée par le score déjà calculé par `importanceProduitFiche` (inchangé), affichant : nom/EAN, rang (si connu), raisons, comparables (X/Y), promo (si présente), raison d'absence (avec le contrôle d'édition), argumentaire, questions de découverte, action recommandée (libellé simple, jamais le mot "score"), pastille de momentum (= couleur du niveau hebdomadaire si ce produit est aussi dans `prioritesSemaine` pour ce magasin, gris neutre sinon).
-3. **En bas : l'assortiment complet**, comme aujourd'hui (tableau de tous les produits avec `StatutSelect`) — les raisons ne s'affichent plus inline ici, elles sont montées dans la section 2.
+0. **PDL du magasin** — un petit bloc avec les 4 champs de §3.3 (générale, YAOS, SIGGI'S, Dessert), éditables en place (input numérique, enregistrement à la perte de focus), affichés même sans valeur (placeholder "-"). Emplacement : sous l'en-tête du magasin, avant les priorités.
+1. **"Priorités de ce magasin"** — `prioritesSemaine(...)` filtré sur `p.magasin.id === magasin.id`. Chaque entrée : pastille de niveau colorée (réutilise `COULEUR_NIVEAU`/`LIBELLE_NIVEAU` de `components/priorites-liste.tsx` — ces deux constantes ne sont actuellement pas exportées de ce fichier, il faut ajouter `export` devant les deux, changement mineur inclus dans ce sous-projet), magasin/produit, et un bouton "Voir les raisons" qui déplie la raison complète (état local, replié par défaut — reste compact).
+2. **"Produits manquants à travailler"** — une carte par produit avec `statut ∈ {manquant, rupture}`, triée en deux temps : d'abord les `typologie === 'obligatoire'` (écarts de conformité, toujours en tête), puis le reste par le score déjà calculé par `importanceProduitFiche` (inchangé) — affichant : nom/EAN, rang (si connu), typologie (badge "Obligatoire" si applicable), raisons, comparables (X/Y), promo (si présente), raison d'absence (avec le contrôle d'édition), argumentaire, questions de découverte, action recommandée (libellé simple, jamais le mot "score"), pastille de momentum (= couleur du niveau hebdomadaire si ce produit est aussi dans `prioritesSemaine` pour ce magasin, gris neutre sinon).
+3. **L'assortiment complet**, comme aujourd'hui (tableau de tous les produits avec `StatutSelect`) — les raisons ne s'affichent plus inline ici, elles sont montées dans la section 2 — avec un champ de recherche par nom ou EAN au-dessus du tableau (même pattern que la recherche déjà en place sur `/admin/produits` : état local, filtre côté client, pas de nouvel appel serveur).
 
 Aucune valeur brute de score n'est affichée nulle part — toujours du texte en langage clair (contrainte déjà en vigueur depuis le sous-projet 1, réaffirmée ici pour la nouvelle UI).
 
@@ -178,7 +220,8 @@ Aucune valeur brute de score n'est affichée nulle part — toujours du texte en
 
 ## 7. Tests requis
 
-- `produitATravailler` : cas avec/sans VMH disponible, avec/sans raison d'absence, avec/sans rang, avec `actionRecommandee === 'aucune_action_commande'` (l'argumentaire ne doit jamais proposer de commande dans ce cas — même exigence de non-régression que le sous-projet 1).
+- `produitATravailler` : cas avec/sans VMH disponible, avec/sans raison d'absence, avec/sans rang, avec `actionRecommandee === 'aucune_action_commande'` (l'argumentaire ne doit jamais proposer de commande dans ce cas — même exigence de non-régression que le sous-projet 1), avec `typologie === 'obligatoire'` (l'argumentaire ouvre par le rappel de conformité) et le cas conflictuel `typologie === 'obligatoire'` **et** `actionRecommandee === 'aucune_action_commande'` (le verrou non commandable l'emporte sur le ton "obligatoire").
 - `vmhPertinent` : les 4 valeurs de `taille` (hyper/super/proxi/drive), y compris le repli HMSM.
 - Générateur de questions de découverte : couverture des 5 valeurs de `raisonAbsence` + le cas générique (null).
 - Mapper d'import VMH : lignes sans EAN ignorées, EAN ne correspondant à aucun produit ignoré, valeurs numériques correctement extraites (test contre un extrait réel du fichier, comme les mappers magasins/produits/promos existants).
+- Tri à deux niveaux de la section "produits manquants à travailler" : un produit `picking` mieux classé par `importanceProduitFiche` reste quand même après un produit `obligatoire` moins bien classé.
