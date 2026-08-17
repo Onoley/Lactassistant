@@ -1,72 +1,155 @@
-import type { Magasin, Produit, PrioriteProduit, Promo, StatutProduit, StatutProduitMagasin } from '@/lib/types'
-import { magasinsSimilaires, type CritereSimilarite } from './similarity'
-import { SCORE_OP_TRADE, scoreMagasinsSimilaires, scoreRangProduit, scoreUrgencePromoJalons } from './scoring'
+import type { Magasin, Produit, ProduitEnseigne, Promo, StatutDisponibilite, StatutProduit, StatutProduitMagasin } from '@/lib/types'
+import { actionRecommandee, type ActionRecommandee } from './action-recommandee'
+import { stadePromo, type StadePromo } from './stade-promo'
 
-export interface PrioriteMagasin {
+export type NiveauPriorite = 'urgent' | 'cette_semaine' | 'a_anticiper'
+
+export interface PrioriteHebdo {
   magasin: Magasin
-  score: number
-  raisons: string[]
+  produit: Produit
+  niveau: NiveauPriorite
+  raison: string
+  stadePromo: StadePromo | null
+  promo: Promo | null
+  actionRecommandee: ActionRecommandee
 }
 
-export function calculerPrioritesMagasins(
+const ORDRE_NIVEAU: Record<NiveauPriorite, number> = { a_anticiper: 1, cette_semaine: 2, urgent: 3 }
+
+function joursAvantEcheance(promo: Promo, aujourdHui: Date): number {
+  const jalons = [promo.date_installation, promo.date_debut_vente, promo.date_fin_vente]
+    .filter((d): d is string => Boolean(d))
+    .map(d => Math.ceil((new Date(d).getTime() - aujourdHui.getTime()) / 86_400_000))
+  const futurs = jalons.filter(j => j >= 0)
+  // Tous les jalons connus sont passés (stade constater) : traité comme urgent,
+  // le produit manque toujours malgré une promo déjà terminée.
+  return futurs.length > 0 ? Math.min(...futurs) : 0
+}
+
+function niveauDepuisJours(jours: number): NiveauPriorite {
+  if (jours <= 7) return 'urgent'
+  if (jours <= 14) return 'cette_semaine'
+  return 'a_anticiper'
+}
+
+function raisonPromo(promo: Promo, stade: StadePromo, jours: number, opTrade: boolean, statutProduitMagasin: StatutProduit): string {
+  if (stade === 'constater') {
+    const dateFin = promo.date_fin_vente ?? promo.date_debut_vente
+    if (opTrade) return `Opération Trade "${promo.mecanique}" terminée le ${dateFin} — à constater (présence, stock, prix).`
+    const encoreManquant = statutProduitMagasin === 'manquant' || statutProduitMagasin === 'rupture'
+    return encoreManquant
+      ? `Promo terminée le ${dateFin} — produit toujours manquant, à négocier.`
+      : `Promo terminée le ${dateFin}.`
+  }
+  const prefixe = opTrade ? 'Promo OP Trade' : 'Promo'
+  const jalon = stade === 'anticiper'
+    ? `installation le ${promo.date_installation ?? promo.date_debut_vente}`
+    : `vente le ${promo.date_debut_vente}`
+  const echeance = jours >= 0 ? `dans ${jours} jour(s)` : 'échéance dépassée'
+  return `${prefixe} "${promo.mecanique}" chez ${promo.enseigne} : ${jalon}, ${echeance}.`
+}
+
+interface Candidat {
+  niveau: NiveauPriorite
+  jours: number
+  promo: Promo | null
+  stade: StadePromo | null
+  raison: string
+}
+
+function candidatsPourProduit(statutProduitMagasin: StatutProduit, promosApplicables: Promo[], aujourdHui: Date): Candidat[] {
+  const candidats: Candidat[] = []
+  const enRupture = statutProduitMagasin === 'rupture'
+  const manquant = statutProduitMagasin === 'manquant' || enRupture
+
+  if (enRupture) {
+    candidats.push({
+      niveau: 'cette_semaine',
+      jours: Infinity,
+      promo: null,
+      stade: null,
+      raison: promosApplicables.length === 0 ? 'Rupture signalée — aucune promo en cours.' : 'Rupture signalée.',
+    })
+  }
+
+  for (const promo of promosApplicables) {
+    const opTrade = Boolean(promo.op_trade)
+    // Rupture/manquant + promo classique : déclenche. Promo OP Trade : déclenche
+    // toujours, présent compris. Aucune autre combinaison ne déclenche.
+    if (!opTrade && !manquant) continue
+    const stade = stadePromo(promo, aujourdHui)
+    const jours = joursAvantEcheance(promo, aujourdHui)
+    const niveau: NiveauPriorite = opTrade ? 'urgent' : niveauDepuisJours(jours)
+    candidats.push({ niveau, jours, promo, stade, raison: raisonPromo(promo, stade, jours, opTrade, statutProduitMagasin) })
+  }
+
+  return candidats
+}
+
+function meilleurCandidat(candidats: Candidat[]): Candidat | null {
+  if (candidats.length === 0) return null
+  return candidats.reduce((meilleur, c) => {
+    if (ORDRE_NIVEAU[c.niveau] > ORDRE_NIVEAU[meilleur.niveau]) return c
+    if (ORDRE_NIVEAU[c.niveau] < ORDRE_NIVEAU[meilleur.niveau]) return meilleur
+    return c.jours < meilleur.jours ? c : meilleur
+  })
+}
+
+export function prioritesSemaine(
   magasins: Magasin[],
   statuts: StatutProduitMagasin[],
   produitsParId: Map<string, Produit>,
-  prioritesParProduitId: Map<string, PrioriteProduit>,
+  produitsEnseigne: ProduitEnseigne[],
   promosParProduitId: Map<string, Promo[]>,
-  critereSimilarite: CritereSimilarite = 'les_deux',
-  aujourdHui?: Date
-): PrioriteMagasin[] {
-  // Statut par magasin+produit (présent compris) pour repérer un produit
-  // manquant ici mais déjà en rayon chez des magasins similaires du secteur.
+  aujourdHui: Date = new Date()
+): PrioriteHebdo[] {
+  const statutDispoParProduitEtEnseigne = new Map<string, StatutDisponibilite>()
+  for (const pe of produitsEnseigne) {
+    statutDispoParProduitEtEnseigne.set(`${pe.produit_id}:${pe.enseigne}`, pe.statut_disponibilite)
+  }
+
   const statutParMagasinEtProduit = new Map<string, Map<string, StatutProduit>>()
-  const manquantsParMagasin = new Map<string, StatutProduitMagasin[]>()
   for (const s of statuts) {
     if (!statutParMagasinEtProduit.has(s.magasin_id)) statutParMagasinEtProduit.set(s.magasin_id, new Map())
     statutParMagasinEtProduit.get(s.magasin_id)!.set(s.produit_id, s.statut)
-    if (s.statut === 'present') continue
-    const liste = manquantsParMagasin.get(s.magasin_id) ?? []
-    liste.push(s)
-    manquantsParMagasin.set(s.magasin_id, liste)
   }
 
-  return magasins
-    .map(magasin => {
-      const manquants = manquantsParMagasin.get(magasin.id) ?? []
-      // Comparaison volontairement limitée au secteur du commercial, pas au
-      // parc national : l'objectif est de comparer des magasins qu'un même
-      // commercial couvre, pas une moyenne nationale hors de son contrôle.
-      const magasinsDuSecteur = magasins.filter(m => m.secteur_id === magasin.secteur_id)
-      const similaires = magasinsSimilaires(magasin, magasinsDuSecteur, critereSimilarite)
+  const resultats: PrioriteHebdo[] = []
 
-      let score = 0
-      const raisons: string[] = []
-      for (const statut of manquants) {
-        const priorite = prioritesParProduitId.get(statut.produit_id)
-        if (!priorite) continue
-        const produit = produitsParId.get(statut.produit_id)
-        const promos = (promosParProduitId.get(statut.produit_id) ?? []).filter(p => p.enseigne === magasin.enseigne)
-        const objectivee = promos.some(p => p.op_trade)
-        const scorePromo = promos.length > 0
-          ? Math.max(...promos.map(p => scoreUrgencePromoJalons([p.date_installation, p.date_debut_vente, p.date_constat], aujourdHui)))
-          : 0
+  for (const magasin of magasins) {
+    const statutsMagasin = statutParMagasinEtProduit.get(magasin.id) ?? new Map<string, StatutProduit>()
 
-        const presentsChezSimilaires = similaires.filter(m => statutParMagasinEtProduit.get(m.id)?.get(statut.produit_id) === 'present')
-        const scoreSimilaires = scoreMagasinsSimilaires(presentsChezSimilaires.length, similaires.length)
+    // Produits à évaluer pour ce magasin : ceux avec un statut explicite +
+    // ceux avec une promo OP Trade dans l'enseigne du magasin (même sans
+    // statut, donc implicitement présents) — une Opé Trade se suit même
+    // quand le produit est déjà en rayon.
+    const produitIds = new Set<string>(statutsMagasin.keys())
+    for (const [produitId, promos] of promosParProduitId) {
+      if (promos.some(p => p.enseigne === magasin.enseigne && p.op_trade)) produitIds.add(produitId)
+    }
 
-        let scoreProduit = scoreRangProduit(priorite.rang) + scorePromo + scoreSimilaires
-        if (objectivee) scoreProduit += SCORE_OP_TRADE
+    for (const produitId of produitIds) {
+      const produit = produitsParId.get(produitId)
+      if (!produit) continue
+      const statutProduitMagasin = statutsMagasin.get(produitId) ?? 'present'
+      const promosApplicables = (promosParProduitId.get(produitId) ?? []).filter(p => p.enseigne === magasin.enseigne)
 
-        if (scoreProduit > score) score = scoreProduit
-        if (produit) {
-          const details: string[] = []
-          if (objectivee) details.push('OP Trade')
-          if (presentsChezSimilaires.length > 0) details.push(`présent chez ${presentsChezSimilaires.length}/${similaires.length} magasin(s) similaire(s)`)
-          raisons.push(`${produit.nom} (${statut.statut}${details.length ? ' — ' + details.join(', ') : ''})`)
-        }
-      }
-      return { magasin, score, raisons }
-    })
-    .filter(p => p.score > 0)
-    .sort((a, b) => b.score - a.score)
+      const meilleur = meilleurCandidat(candidatsPourProduit(statutProduitMagasin, promosApplicables, aujourdHui))
+      if (!meilleur) continue
+
+      const statutDisponibilite = statutDispoParProduitEtEnseigne.get(`${produitId}:${magasin.enseigne}`) ?? 'commandable'
+
+      resultats.push({
+        magasin,
+        produit,
+        niveau: meilleur.niveau,
+        raison: meilleur.raison,
+        stadePromo: meilleur.stade,
+        promo: meilleur.promo,
+        actionRecommandee: actionRecommandee(statutDisponibilite, meilleur.stade, statutProduitMagasin),
+      })
+    }
+  }
+
+  return resultats.sort((a, b) => ORDRE_NIVEAU[b.niveau] - ORDRE_NIVEAU[a.niveau])
 }

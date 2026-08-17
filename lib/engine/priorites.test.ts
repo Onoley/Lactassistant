@@ -1,144 +1,108 @@
 import { describe, expect, it } from 'vitest'
-import { calculerPrioritesMagasins } from './priorites'
-import type { Magasin, Produit, PrioriteProduit, Promo, StatutProduitMagasin } from '@/lib/types'
+import { prioritesSemaine } from './priorites'
+import type { Magasin, Produit, ProduitEnseigne, Promo, StatutProduitMagasin } from '@/lib/types'
 
 function magasin(id: string, overrides: Partial<Magasin> = {}): Magasin {
   return { id, code: id, nom: `Magasin ${id}`, enseigne: 'Carrefour', taille: 'super', adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null, ...overrides }
 }
 
-describe('calculerPrioritesMagasins', () => {
-  it('trie les magasins par score décroissant et ignore ceux sans manque', () => {
-    const magasins = [magasin('1'), magasin('2'), magasin('3')]
-    const produits = new Map<string, Produit>([['p1', { id: 'p1', code: 'P1', nom: 'Yaourt', categorie: null }]])
-    const priorites = new Map<string, PrioriteProduit>([['p1', { produit_id: 'p1', rang: 20 }]])
+const yaourt: Produit = { id: 'p1', code: 'P1', nom: 'Yaourt', categorie: null }
+const fromage: Produit = { id: 'p2', code: 'P2', nom: 'Fromage', categorie: null }
+const produitsParId = new Map<string, Produit>([['p1', yaourt], ['p2', fromage]])
+
+function promo(overrides: Partial<Promo> = {}): Promo {
+  return { id: 'pr1', code: 'PR1', enseigne: 'Carrefour', mecanique: '-20%', date_installation: null, date_debut_vente: '2026-08-20', date_constat: null, ...overrides }
+}
+
+describe('prioritesSemaine', () => {
+  it('ignore un Top 20 sans promo ni rupture (aucune donnée de rang ne lui est même fournie)', () => {
+    const mag = magasin('1')
     const statuts: StatutProduitMagasin[] = [
       { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
-      { magasin_id: '2', produit_id: 'p1', statut: 'present', signale_par: null, signale_at: '' },
     ]
-
-    const result = calculerPrioritesMagasins(magasins, statuts, produits, priorites, new Map())
-
-    expect(result).toHaveLength(1)
-    expect(result[0].magasin.id).toBe('1')
-    // Magasin 2 est similaire (même enseigne/taille/secteur) et a le produit
-    // en rayon : la raison le mentionne, en plus du statut manquant.
-    expect(result[0].raisons[0]).toContain('Yaourt (manquant')
-    expect(result[0].raisons[0]).toContain('présent chez 1/2 magasin(s) similaire(s)')
+    const result = prioritesSemaine([mag], statuts, produitsParId, [], new Map())
+    expect(result).toHaveLength(0)
   })
 
-  it('trie plusieurs magasins avec promos par score décroissant', () => {
-    const mag1 = magasin('1', { enseigne: 'Carrefour' })
-    const mag2 = magasin('2', { enseigne: 'Carrefour' })
-    const magasins = [mag1, mag2]
-    const produits = new Map<string, Produit>([
-      ['p1', { id: 'p1', code: 'P1', nom: 'Yaourt', categorie: null }],
-      ['p2', { id: 'p2', code: 'P2', nom: 'Fromage', categorie: null }],
-    ])
-    const priorites = new Map<string, PrioriteProduit>([
-      ['p1', { produit_id: 'p1', rang: 20 }],
-      ['p2', { produit_id: 'p2', rang: 50 }],
-    ])
+  it('une rupture sans promo associée apparaît avec un niveau cette_semaine minimum', () => {
+    const mag = magasin('1')
+    const statuts: StatutProduitMagasin[] = [
+      { magasin_id: '1', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '' },
+    ]
+    const result = prioritesSemaine([mag], statuts, produitsParId, [], new Map(), new Date('2026-08-17'))
+    expect(result).toHaveLength(1)
+    expect(result[0].niveau).toBe('cette_semaine')
+    expect(result[0].raison).toBe('Rupture signalée — aucune promo en cours.')
+  })
+
+  it('une promo OP Trade sur un produit manquant déclenche un niveau urgent', () => {
+    const mag = magasin('1')
     const statuts: StatutProduitMagasin[] = [
       { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
-      { magasin_id: '2', produit_id: 'p2', statut: 'manquant', signale_par: null, signale_at: '' },
     ]
-    const promo: Promo = { id: 'pr1', code: 'PR1', enseigne: 'Carrefour', mecanique: '-20%', date_installation: '2026-08-18', date_debut_vente: '2026-08-20', date_constat: '2026-08-25' }
-    const promosParProduitId = new Map<string, Promo[]>([
-      ['p1', [promo]],
-      ['p2', [promo]],
-    ])
+    const promoOpTrade = promo({ op_trade: 'OP LAITIERS', date_installation: '2026-12-01', date_debut_vente: '2026-12-10' })
+    const promosParProduitId = new Map<string, Promo[]>([['p1', [promoOpTrade]]])
+    const result = prioritesSemaine([mag], statuts, produitsParId, [], promosParProduitId, new Date('2026-08-17'))
+    expect(result).toHaveLength(1)
+    expect(result[0].niveau).toBe('urgent')
+  })
 
-    const result = calculerPrioritesMagasins(magasins, statuts, produits, priorites, promosParProduitId)
+  it('une promo OP Trade sur un produit déjà présent déclenche quand même une entrée, niveau urgent', () => {
+    const mag = magasin('1')
+    // Aucun statut explicite pour p1 dans ce magasin : implicitement "present".
+    const promoOpTrade = promo({ op_trade: 'OP LAITIERS', date_installation: '2026-07-01', date_debut_vente: '2026-07-10', date_fin_vente: '2026-09-30' })
+    const promosParProduitId = new Map<string, Promo[]>([['p1', [promoOpTrade]]])
+    const result = prioritesSemaine([mag], [], produitsParId, [], promosParProduitId, new Date('2026-08-17'))
+    expect(result).toHaveLength(1)
+    expect(result[0].niveau).toBe('urgent')
+    expect(result[0].stadePromo).toBe('controler')
+  })
 
+  it("stade constater : absent si la promo n'est pas OP Trade et que le produit est present", () => {
+    const mag = magasin('1')
+    const statuts: StatutProduitMagasin[] = [
+      { magasin_id: '1', produit_id: 'p1', statut: 'present', signale_par: null, signale_at: '' },
+    ]
+    const promoTerminee = promo({ date_installation: '2026-06-01', date_debut_vente: '2026-06-10', date_fin_vente: '2026-06-30' })
+    const promosParProduitId = new Map<string, Promo[]>([['p1', [promoTerminee]]])
+    const result = prioritesSemaine([mag], statuts, produitsParId, [], promosParProduitId, new Date('2026-08-17'))
+    expect(result).toHaveLength(0)
+  })
+
+  it('stade constater : présent si le produit est toujours manquant, avec le message dédié', () => {
+    const mag = magasin('1')
+    const statuts: StatutProduitMagasin[] = [
+      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
+    ]
+    const promoTerminee = promo({ date_installation: '2026-06-01', date_debut_vente: '2026-06-10', date_fin_vente: '2026-06-30' })
+    const promosParProduitId = new Map<string, Promo[]>([['p1', [promoTerminee]]])
+    const result = prioritesSemaine([mag], statuts, produitsParId, [], promosParProduitId, new Date('2026-08-17'))
+    expect(result).toHaveLength(1)
+    expect(result[0].raison).toBe('Promo terminée le 2026-06-30 — produit toujours manquant, à négocier.')
+  })
+
+  it("applique le statut_disponibilite de produits_enseigne pour verrouiller l'action recommandée", () => {
+    const mag = magasin('1')
+    const statuts: StatutProduitMagasin[] = [
+      { magasin_id: '1', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '' },
+    ]
+    const produitsEnseigne: ProduitEnseigne[] = [
+      { produit_id: 'p1', enseigne: 'Carrefour', typologie: null, statut_disponibilite: 'arret_industriel' },
+    ]
+    const result = prioritesSemaine([mag], statuts, produitsParId, produitsEnseigne, new Map(), new Date('2026-08-17'))
+    expect(result).toHaveLength(1)
+    expect(result[0].actionRecommandee).toBe('aucune_action_commande')
+  })
+
+  it('produit une entrée distincte par magasin', () => {
+    const magA = magasin('1', { secteur_id: 'a' })
+    const magB = magasin('2', { secteur_id: 'b' })
+    const statuts: StatutProduitMagasin[] = [
+      { magasin_id: '1', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '' },
+      { magasin_id: '2', produit_id: 'p2', statut: 'rupture', signale_par: null, signale_at: '' },
+    ]
+    const result = prioritesSemaine([magA, magB], statuts, produitsParId, [], new Map(), new Date('2026-08-17'))
     expect(result).toHaveLength(2)
-    expect(result[0].magasin.id).toBe('1')
-    expect(result[1].magasin.id).toBe('2')
-    expect(result[0].score).toBeGreaterThan(result[1].score)
-  })
-
-  it("ignore les promos d'une autre enseigne", () => {
-    const magCarrefour = magasin('1', { enseigne: 'Carrefour' })
-    const magasins = [magCarrefour]
-    const produits = new Map<string, Produit>([['p1', { id: 'p1', code: 'P1', nom: 'Yaourt', categorie: null }]])
-    const priorites = new Map<string, PrioriteProduit>([['p1', { produit_id: 'p1', rang: 20 }]])
-    const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
-    ]
-    const promoLeclerc: Promo = { id: 'pr1', code: 'PR1', enseigne: 'Leclerc', mecanique: '-20%', date_installation: '2026-08-18', date_debut_vente: '2026-08-20', date_constat: '2026-08-25' }
-    const promosParProduitId = new Map<string, Promo[]>([['p1', [promoLeclerc]]])
-
-    const result = calculerPrioritesMagasins(magasins, statuts, produits, priorites, promosParProduitId)
-
-    expect(result).toHaveLength(1)
-    expect(result[0].score).toBe(100)
-  })
-
-  it('score élevé si date_constat est imminente même si date_installation est passée', () => {
-    const magasins = [magasin('1', { enseigne: 'Carrefour' })]
-    const produits = new Map<string, Produit>([['p1', { id: 'p1', code: 'P1', nom: 'Yaourt', categorie: null }]])
-    const priorites = new Map<string, PrioriteProduit>([['p1', { produit_id: 'p1', rang: 20 }]])
-    const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
-    ]
-    const promoWithPastInstallButImminentConstat: Promo = {
-      id: 'pr1',
-      code: 'PR1',
-      enseigne: 'Carrefour',
-      mecanique: '-20%',
-      date_installation: '2026-08-01',
-      date_debut_vente: '2026-08-05',
-      date_constat: '2026-08-17'
-    }
-    const promosParProduitId = new Map<string, Promo[]>([['p1', [promoWithPastInstallButImminentConstat]]])
-
-    const result = calculerPrioritesMagasins(magasins, statuts, produits, priorites, promosParProduitId, 'les_deux', new Date('2026-08-16'))
-
-    expect(result).toHaveLength(1)
-    expect(result[0].score).toBe(200)
-  })
-
-  it('fait remonter en tête un magasin dont le manquant est lié à une promo OP Trade, même avec un rang plus faible', () => {
-    const magTop20 = magasin('1', { enseigne: 'Carrefour' })
-    const magOpTrade = magasin('2', { enseigne: 'Carrefour' })
-    const produits = new Map<string, Produit>([
-      ['p1', { id: 'p1', code: 'P1', nom: 'Top20', categorie: null }],
-      ['p2', { id: 'p2', code: 'P2', nom: 'Top70 objectivé', categorie: null }],
-    ])
-    const priorites = new Map<string, PrioriteProduit>([
-      ['p1', { produit_id: 'p1', rang: 20 }],
-      ['p2', { produit_id: 'p2', rang: 70 }],
-    ])
-    const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
-      { magasin_id: '2', produit_id: 'p2', statut: 'manquant', signale_par: null, signale_at: '' },
-    ]
-    const promoOpTrade: Promo = {
-      id: 'pr1', code: 'PR1', enseigne: 'Carrefour', mecanique: '-20%',
-      date_installation: null, date_debut_vente: '2026-12-01', date_constat: null,
-      op_trade: 'OP PRODUITS LAITIERS',
-    }
-    const promosParProduitId = new Map<string, Promo[]>([['p2', [promoOpTrade]]])
-
-    const result = calculerPrioritesMagasins([magTop20, magOpTrade], statuts, produits, priorites, promosParProduitId)
-
-    expect(result[0].magasin.id).toBe('2')
-    expect(result[0].raisons[0]).toContain('OP Trade')
-  })
-
-  it('ne compare que les magasins du même secteur pour le signal "magasins similaires"', () => {
-    const magSecteurA = magasin('1', { secteur_id: 'a' })
-    const magSecteurB = magasin('2', { secteur_id: 'b' })
-    const produits = new Map<string, Produit>([['p1', { id: 'p1', code: 'P1', nom: 'Yaourt', categorie: null }]])
-    const priorites = new Map<string, PrioriteProduit>([['p1', { produit_id: 'p1', rang: 70 }]])
-    const statuts: StatutProduitMagasin[] = [
-      { magasin_id: '1', produit_id: 'p1', statut: 'manquant', signale_par: null, signale_at: '' },
-      { magasin_id: '2', produit_id: 'p1', statut: 'present', signale_par: null, signale_at: '' },
-    ]
-
-    const result = calculerPrioritesMagasins([magSecteurA, magSecteurB], statuts, produits, priorites, new Map())
-
-    // Le magasin similaire est dans un autre secteur : pas de bonus, pas de mention.
-    expect(result[0].raisons[0]).not.toContain('similaire')
-    expect(result[0].score).toBe(30) // rang 70 seul
+    expect(result.map(r => r.magasin.id).sort()).toEqual(['1', '2'])
   })
 })
