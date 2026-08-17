@@ -1,6 +1,7 @@
 'use client'
 import { useMemo, useState } from 'react'
 import type { PrioriteHebdo, NiveauPriorite } from '@/lib/engine/priorites'
+import { regrouperParPromo } from '@/lib/engine/regrouper-priorites'
 
 export const LIBELLE_NIVEAU: Record<NiveauPriorite, string> = { urgent: 'Urgent', cette_semaine: 'Cette semaine', a_anticiper: 'À anticiper' }
 export const COULEUR_NIVEAU: Record<NiveauPriorite, string> = {
@@ -49,6 +50,7 @@ export function PrioritesListe({
   const [types, setTypes] = useState<Set<Type>>(new Set(TYPES))
 
   const filtrees = priorites.filter(p => niveaux.has(p.niveau) && enseignes.has(p.magasin.enseigne) && types.has(typeDe(p)))
+  const groupes = regrouperParPromo(filtrees)
 
   return (
     <div>
@@ -84,24 +86,27 @@ export function PrioritesListe({
 
       {variant === 'liste' ? (
         <ul className="space-y-2">
-          {filtrees.slice(0, 15).map((p, i) => (
-            <li key={`${p.magasin.id}-${p.produit.id}-${i}`} className={`border rounded p-2 ${COULEUR_NIVEAU[p.niveau]}`}>
-              <p className="font-medium">{p.magasin.nom} — {LIBELLE_NIVEAU[p.niveau]}</p>
-              <p className="text-sm">{p.produit.nom} — {p.raison}</p>
+          {groupes.slice(0, 15).map(g => (
+            <li key={g.cle} className={`border rounded p-2 ${COULEUR_NIVEAU[g.niveau]}`}>
+              <p className="font-medium">{g.magasin.nom} — {LIBELLE_NIVEAU[g.niveau]}</p>
+              {g.promo && <p className="text-sm font-semibold">{g.promo.theme ?? g.promo.mecanique}</p>}
+              <p className="text-sm">{g.raison}</p>
+              <p className="text-sm text-gray-600">{g.produits.map(pr => pr.nom).join(', ')}</p>
             </li>
           ))}
         </ul>
       ) : (
         <table className="w-full text-sm">
-          <thead><tr><th className="text-left">Magasin</th><th className="text-left">Commercial</th><th className="text-left">Produit</th><th className="text-left">Niveau</th><th className="text-left">Raison</th></tr></thead>
+          <thead><tr><th className="text-left">Magasin</th><th className="text-left">Commercial</th><th className="text-left">Promo</th><th className="text-left">Produit(s)</th><th className="text-left">Niveau</th><th className="text-left">Raison</th></tr></thead>
           <tbody>
-            {filtrees.map((p, i) => (
-              <tr key={`${p.magasin.id}-${p.produit.id}-${i}`}>
-                <td>{p.magasin.nom}</td>
-                <td>{emailParSecteur?.get(p.magasin.secteur_id) ?? '-'}</td>
-                <td>{p.produit.nom}</td>
-                <td><span className={`px-2 py-0.5 rounded border text-xs ${COULEUR_NIVEAU[p.niveau]}`}>{LIBELLE_NIVEAU[p.niveau]}</span></td>
-                <td>{p.raison}</td>
+            {groupes.map(g => (
+              <tr key={g.cle}>
+                <td>{g.magasin.nom}</td>
+                <td>{emailParSecteur?.get(g.magasin.secteur_id) ?? '-'}</td>
+                <td>{g.promo ? (g.promo.theme ?? g.promo.mecanique) : '-'}</td>
+                <td>{g.produits.map(pr => pr.nom).join(', ')}</td>
+                <td><span className={`px-2 py-0.5 rounded border text-xs ${COULEUR_NIVEAU[g.niveau]}`}>{LIBELLE_NIVEAU[g.niveau]}</span></td>
+                <td>{g.raison}</td>
               </tr>
             ))}
           </tbody>
