@@ -9,14 +9,14 @@ function magasin(overrides: Partial<Magasin> = {}): Magasin {
 const produit: Produit = { id: 'p1', code: 'P1', nom: 'Yaourt Nature', categorie: null, produit_canonique_id: null, famille: null, segment: null, statut_catalogue: 'permanent', type_liaison: null }
 
 describe('produitATravailler', () => {
-  it("n'affiche jamais d'action de commande pour un produit non commandable, meme obligatoire", () => {
+  it("n'affiche jamais d'action de commande pour un produit non commandable, quelle que soit sa typologie", () => {
     const result = produitATravailler(
-      magasin(), produit, 20, 'obligatoire', 'manquant', null, 'arret_industriel',
+      magasin(), produit, 20, 'T1', 'manquant', null, 'arret_industriel',
       [], new Map(), [], null, null, 'les_deux', null
     )
     expect(result.actionRecommandee).toBe('aucune_action_commande')
     expect(result.argumentaire).toContain('non commandable')
-    expect(result.argumentaire).not.toContain('obligatoire')
+    expect(result.argumentaire).not.toContain('T1')
   })
 
   it('intègre le VMH national quand disponible, scopé au format hyper', () => {
