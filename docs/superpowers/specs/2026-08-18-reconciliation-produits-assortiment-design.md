@@ -26,7 +26,7 @@ Cette règle s'applique aux 6 enseignes sans exception, et devra s'appliquer aut
 ## Ce qui est confirmé (vérifié contre les données réelles)
 
 - **159 EAN listés dans les plans de vente existent déjà tous dans `produits`** — aucune création de produit nécessaire.
-- **76 produits n'apparaissent sur aucun plan de vente.** Après recoupement (abréviations FDM/RAL/SAL/PPC/YPV/VDC/YAF PAT, format de conditionnement, et les précisions métier de l'utilisateur) : **56 se rattachent avec confiance** à un produit canonique, **20 restent `a_qualifier`** — détail complet dans "Rapport de correspondances canoniques" plus bas. Deux propositions initiales de l'utilisateur (Yaos café → `3023290096895`, Yaos pistache → `3023290093542`) ont été vérifiées contre la base et **rejetées** : ces EAN cibles correspondent en réalité à Siggis Myrtille et La Laitiere Mangue, pas aux produits Yaos décrits — vraisemblablement des coquilles de saisie. Les 4 EAN Yaos café/pistache concernés restent `a_qualifier`. Un lien initialement proposé par mon propre algorithme (`Lindahls Pro + Stracciatella` x1 330g → x2 160g) a aussi été retiré après vérification : les deux noms sont identiques mais **aucun marqueur promotionnel** (ni `OD` ni `+N offert`) ne figure sur le premier — les deux formats sont vraisemblablement des références permanentes distinctes (même logique que Flanby x6/x12), pas une variante promo d'emballage.
+- **76 produits n'apparaissent sur aucun plan de vente.** Après recoupement (abréviations FDM/RAL/SAL/PPC/YPV/VDC/YAF PAT, format de conditionnement, et les précisions métier de l'utilisateur) : **60 se rattachent avec confiance** à un produit canonique, **16 restent `a_qualifier`** — détail complet dans "Rapport de correspondances canoniques" plus bas. Deux propositions initiales de l'utilisateur (Yaos café → `3023290096895`, Yaos pistache → `3023290093542`) ont été vérifiées contre la base et **rejetées** : ces EAN cibles correspondent en réalité à Siggis Myrtille et La Laitiere Mangue, pas aux produits Yaos décrits — coquilles de saisie. L'utilisateur a fourni les bons EAN (Yaos pistache → `3023290091555` "Nestle Yaos Brasse Chaud Pistache", Yaos café → `3023290096475` "Nestle Yaos Brasse Chaud Cafe"), vérifiés et confirmés — mon algorithme ne les avait pas trouvés car le nom canonique réel porte un qualificatif "Brasse Chaud" non anticipé. Un lien initialement proposé par mon propre algorithme (`Lindahls Pro + Stracciatella` x1 330g → x2 160g) a été retiré après vérification : les deux noms sont identiques mais **aucun marqueur promotionnel** (ni `OD` ni `+N offert`) ne figure sur le premier — les deux formats sont vraisemblablement des références permanentes distinctes (même logique que Flanby x6/x12), pas une variante promo d'emballage.
 - **La typologie T1-T6/H1-H4/MN/MD/Région est réelle**, propre à chaque enseigne. MN = "module nature", MD = "module dessert" : des modules que le magasin active ou non (pas un niveau de priorité). T1/T2.../H1/H2... : le magasin se déclare lui-même à un niveau par famille/segment (donnée non encore collectée — Phase 2), et tout produit à ce niveau ou en-dessous est attendu, le reste est du picking.
 - **1 signalement réel** (`statuts_produit_magasin`) existe contre un EAN promotionnel (`La Laitière RAL nature sur lit de caramel 4x115g +2 offerts`, magasin Auchan La Défense, manquant) — ce cas historique est récupéré par résolution à la lecture ; tous les signalements futurs sont normalisés dès l'écriture (voir "Résolution à la lecture et à l'écriture").
 - **0 lignes `priorites_produits`** (Top 20/50/70) ne référencent un EAN promotionnel.
@@ -138,7 +138,7 @@ Règle de fond conservée : **produit permanent absent + promotion à venir dans
 
 ## Rapport de correspondances canoniques
 
-**56 liens créés** (48 initiaux + 8 confirmés par l'utilisateur après vérification) :
+**60 liens créés** (48 initiaux + 12 confirmés par l'utilisateur après vérification) :
 
 | EAN variante | Nom variante | → EAN canonique | Nom canonique | Type |
 |---|---|---|---|---|
@@ -198,8 +198,12 @@ Règle de fond conservée : **produit permanent absent + promotion à venir dans
 | 3023290021620 | Viennois vanille caramel OD 4x100g | 3023290620144 | Nestle Le Viennois Caramel & Vanille x4 100g | conditionnement_promo |
 | 3023290032732 | Yaos coco 4x125g +2 offerts | 3023290030776 | Nestle Yaos Noix De Coco x4 125g | conditionnement_promo |
 | 3023290032763 | Yaos coco OD 4x125g | 3023290030776 | Nestle Yaos Noix De Coco x4 125g | conditionnement_promo |
+| 3023290096505 | Yaos café 4x125g +2 offerts | 3023290096475 | Nestle Yaos Brasse Chaud Cafe x4 125g | conditionnement_promo |
+| 3023290097519 | Yaos café OD 4x125g | 3023290096475 | Nestle Yaos Brasse Chaud Cafe x4 125g | conditionnement_promo |
+| 3023290091937 | Yaos pistache 4x125g +2 offerts | 3023290091555 | Nestle Yaos Brasse Chaud Pistache x4 125g | conditionnement_promo |
+| 3023290092057 | Yaos pistache OD 4x125g | 3023290091555 | Nestle Yaos Brasse Chaud Pistache x4 125g | conditionnement_promo |
 
-**20 laissés `a_qualifier`** — pas de correspondance fiable, aucun lien créé :
+**16 laissés `a_qualifier`** — pas de correspondance fiable, aucun lien créé :
 
 | EAN | Nom | Raison |
 |---|---|---|
@@ -219,10 +223,6 @@ Règle de fond conservée : **produit permanent absent + promotion à venir dans
 | 3023290103494 | YPV panaché OD 8x125g | Composition à confirmer |
 | 3023290097489 | YPV nouveau panaché OD 8x125g | Idem "nouveau" |
 | 3023290620182 | YAF PAT panaché 12x125g +4 offerts | Composition à confirmer |
-| 3023290096505 | Yaos café 4x125g +2 offerts | Cible proposée par l'utilisateur (3023290096895) vérifiée = Siggis Myrtille, pas Yaos café — rejetée |
-| 3023290097519 | Yaos café OD 4x125g | Idem |
-| 3023290091937 | Yaos pistache 4x125g +2 offerts | Cible proposée par l'utilisateur (3023290093542) vérifiée = La Laitiere Mangue, pas Yaos pistache — rejetée |
-| 3023290092057 | Yaos pistache OD 4x125g | Idem |
 
 ## Tests
 

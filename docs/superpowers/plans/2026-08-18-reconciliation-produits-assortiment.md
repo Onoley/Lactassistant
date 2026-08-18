@@ -16,7 +16,7 @@
 - A canonical product's own `produit_canonique_id` must be `null` (enforced by trigger, not just convention) — this is what prevents chains and cycles.
 - Assortment reads must reflect only `actif = true` rows in `produits_enseigne`; the plan-de-vente import deactivates stale rows, it never deletes them.
 - `Typologie` stores the raw enseigne code (`T1`..`T6`, `H1`..`H4`, `MN`, `MD`, `Région`) as free text — no binary obligatoire/picking enum anywhere in Phase 1.
-- The 56 canonical links and 20 `a_qualifier` rows enumerated in the spec's "Rapport de correspondances canoniques" are the exact, pre-verified data to apply — do not re-derive or second-guess them; do not invent new links beyond that list.
+- The 60 canonical links and 16 `a_qualifier` rows enumerated in the spec's "Rapport de correspondances canoniques" are the exact, pre-verified data to apply — do not re-derive or second-guess them; do not invent new links beyond that list.
 
 ---
 
@@ -789,22 +789,22 @@ git commit -m "feat: import plan de vente avec aperçu, désactivation et histor
 
 ---
 
-### Task 7: Apply the 56 canonical links + 20 `a_qualifier` statuses (data fix)
+### Task 7: Apply the 60 canonical links + 16 `a_qualifier` statuses (data fix)
 
 **Files:**
 - None (data-only; run via a throwaway script against the live DB using the service-role key, same pattern used earlier this session for the surface/VMH backfills — do not commit the script)
 
 **Interfaces:**
-- Consumes: the exact table in `docs/superpowers/specs/2026-08-18-reconciliation-produits-assortiment-design.md` under "Rapport de correspondances canoniques" — copy the 56 pairs and 20 `a_qualifier` EANs verbatim, do not re-derive.
+- Consumes: the exact table in `docs/superpowers/specs/2026-08-18-reconciliation-produits-assortiment-design.md` under "Rapport de correspondances canoniques" — copy the 60 pairs and 16 `a_qualifier` EANs verbatim, do not re-derive.
 
-- [ ] **Step 1: Write and run a script that, for each of the 56 pairs, sets `produit_canonique_id`, `type_liaison = 'conditionnement_promo'`, `statut_catalogue = 'variante_promo'` on the variant row (by EAN), and confirms the target EAN's own `produit_canonique_id` is null first (trigger will reject otherwise — this is expected safety, not a bug to work around)**
+- [ ] **Step 1: Write and run a script that, for each of the 60 pairs, sets `produit_canonique_id`, `type_liaison = 'conditionnement_promo'`, `statut_catalogue = 'variante_promo'` on the variant row (by EAN), and confirms the target EAN's own `produit_canonique_id` is null first (trigger will reject otherwise — this is expected safety, not a bug to work around)**
 
-- [ ] **Step 2: For each of the 20 `a_qualifier` EANs, set `statut_catalogue = 'a_qualifier'`**
+- [ ] **Step 2: For each of the 16 `a_qualifier` EANs, set `statut_catalogue = 'a_qualifier'`**
 
 - [ ] **Step 3: Verify via SQL**
 
 ```sql
-select count(*) from produits where produit_canonique_id is not null; -- expect 56
+select count(*) from produits where produit_canonique_id is not null; -- expect 60
 select count(*) from produits where statut_catalogue = 'a_qualifier'; -- expect 20
 select count(*) from produits where statut_catalogue = 'variante_promo' and produit_canonique_id is null; -- expect 0 (consistency check)
 ```
@@ -1109,6 +1109,6 @@ where pe.actif = true and (p.nom ilike '% OD %' or p.nom ilike '%+%offert%');
 
 Expected: 0 rows.
 
-- [ ] **Step 7: Produce the final report to the user**, covering exactly what was requested: résumé des modifications, rapport des correspondances canoniques (the 56+20 table, already in the spec — link to it), résultat de l'import par enseigne (from Step 4/5's real output), références encore à qualifier (the 20 EANs), tests exécutés (Step 2's count and what they cover), and a verification of the Leclerc assortment list showing full names and formats (query a sample of ~10 Leclerc rows with `nomComplet` applied, or a screenshot via the browser tool if dev server + a logged-in session are available — if not available, the SQL sample is sufficient, state which was used).
+- [ ] **Step 7: Produce the final report to the user**, covering exactly what was requested: résumé des modifications, rapport des correspondances canoniques (the 60+16 table, already in the spec — link to it), résultat de l'import par enseigne (from Step 4/5's real output), références encore à qualifier (the 16 EANs), tests exécutés (Step 2's count and what they cover), and a verification of the Leclerc assortment list showing full names and formats (query a sample of ~10 Leclerc rows with `nomComplet` applied, or a screenshot via the browser tool if dev server + a logged-in session are available — if not available, the SQL sample is sufficient, state which was used).
 
 No commit for this task (reporting only); if Steps 1-3 surfaced fixes, those get their own commits within the relevant earlier task, not bundled here.
