@@ -278,8 +278,13 @@ const ENSEIGNES_PLAN_DE_VENTE: { sheet: string; enseigne: string }[] = [
 ]
 
 async function chargerDiffsPlanDeVente(buffer: ArrayBuffer, admin: ReturnType<typeof createAdminClient>) {
-  const { data: produits } = await admin.from('produits').select('id, code')
+  const { data: produits } = await admin.from('produits').select('id, code, nom')
   const produitIdParEan = new Map((produits ?? []).map(p => [p.code, p.id]))
+  // code/nom sont NOT NULL sur produits — un upsert ON CONFLICT DO UPDATE valide
+  // quand même les contraintes NOT NULL de la branche INSERT candidate avant de
+  // détecter le conflit, donc un upsert famille/segment qui omettrait ces deux
+  // colonnes échouerait même si la ligne existe déjà.
+  const infoParProduitId = new Map((produits ?? []).map(p => [p.id, { code: p.code as string, nom: p.nom as string }]))
 
   const ongletsManquants: string[] = []
   const diffs: ReturnType<typeof calculerDiffPlanDeVente>[] = []
@@ -304,7 +309,7 @@ async function chargerDiffsPlanDeVente(buffer: ArrayBuffer, admin: ReturnType<ty
     diffs.push(diff)
   }
 
-  return { diffs, ongletsManquants }
+  return { diffs, ongletsManquants, infoParProduitId }
 }
 
 export interface PreviewPlanDeVente {
@@ -324,7 +329,7 @@ export async function confirmerImportPlanDeVente(formData: FormData): Promise<{ 
   await assertAdmin()
   const file = formData.get('file') as File
   const admin = createAdminClient()
-  const { diffs, ongletsManquants } = await chargerDiffsPlanDeVente(await file.arrayBuffer(), admin)
+  const { diffs, ongletsManquants, infoParProduitId } = await chargerDiffsPlanDeVente(await file.arrayBuffer(), admin)
   if (ongletsManquants.length > 0) {
     throw new Error(`Onglets manquants, import refusé : ${ongletsManquants.join(', ')}`)
   }
@@ -363,7 +368,9 @@ export async function confirmerImportPlanDeVente(formData: FormData): Promise<{ 
   }
   if (familleSegmentAAppliquer.size > 0) {
     const { error } = await admin.from('produits').upsert(
-      [...familleSegmentAAppliquer.entries()].map(([id, fs]) => ({ id, famille: fs.famille, segment: fs.segment })),
+      [...familleSegmentAAppliquer.entries()]
+        .filter(([id]) => infoParProduitId.has(id))
+        .map(([id, fs]) => ({ id, code: infoParProduitId.get(id)!.code, nom: infoParProduitId.get(id)!.nom, famille: fs.famille, segment: fs.segment })),
       { onConflict: 'id' }
     )
     if (error) throw error
