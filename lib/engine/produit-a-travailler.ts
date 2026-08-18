@@ -1,4 +1,4 @@
-import type { Magasin, Produit, Promo, RaisonAbsence, StatutDisponibilite, StatutProduit, Typologie, VmhNational } from '@/lib/types'
+import type { Magasin, Produit, Promo, RaisonAbsence, StatutDisponibilite, StatutProduit, Typologie, VmhEnseigne, VmhNational } from '@/lib/types'
 import { importanceProduitFiche, promoPrincipale } from './importance-produit'
 import type { CritereSimilarite } from './similarity'
 import type { Rang } from './scoring'
@@ -12,7 +12,7 @@ export interface ProduitATravailler {
   typologie: Typologie | null
   raisons: string[]
   presentsChezComparables: { total: number; presents: number }
-  vmhNational: { vmh: number | null; dv: number | null } | null
+  vmh: { vmh: number | null; dv: number | null; source: 'enseigne' | 'national' } | null
   raisonAbsence: RaisonAbsence | null
   argumentaire: string
   questionsDecouverte: string[]
@@ -79,7 +79,7 @@ function construireArgumentaire(
   magasin: Magasin,
   presentsChezComparables: { total: number; presents: number },
   promoInfo: ReturnType<typeof promoPrincipale>,
-  vmh: { vmh: number | null; dv: number | null } | null,
+  vmh: { vmh: number | null; dv: number | null; source: 'enseigne' | 'national' } | null,
   raisonAbsence: RaisonAbsence | null,
   action: ActionRecommandee,
   statutDisponibilite: StatutDisponibilite
@@ -104,7 +104,10 @@ function construireArgumentaire(
     const parts: string[] = []
     if (vmh.vmh !== null) parts.push(`tourne à ${vmh.vmh.toFixed(1)} unités/semaine en moyenne`)
     if (vmh.dv !== null) parts.push(`est référencé par ${vmh.dv.toFixed(0)} % des ${formatLabel}`)
-    if (parts.length > 0) phrases.push(`Au national, ce produit ${parts.join(' et ')}.`)
+    if (parts.length > 0) {
+      const prefixe = vmh.source === 'enseigne' ? `Chez ${magasin.enseigne}` : 'Au national'
+      phrases.push(`${prefixe}, ce produit ${parts.join(' et ')}.`)
+    }
   }
   if (raisonAbsence) {
     phrases.push(`Frein identifié : ${LIBELLE_RAISON[raisonAbsence]}.`)
@@ -126,6 +129,7 @@ export function produitATravailler(
   statutsComparables: Map<string, StatutProduit>,
   promosDuProduit: Promo[],
   vmhNational: VmhNational | null,
+  vmhEnseigne: VmhEnseigne | null,
   critere: CritereSimilarite,
   niveauHebdo: NiveauPriorite | null,
   aujourdHui: Date = new Date()
@@ -137,7 +141,7 @@ export function produitATravailler(
     ? importanceProduitFiche(magasin, produit, rang, magasinsComparables, statutsComparables, promosDuProduit, critere, aujourdHui)
     : null
 
-  const vmh = vmhPertinent(magasin, vmhNational)
+  const vmh = vmhPertinent(magasin, vmhNational, vmhEnseigne)
   const action = actionRecommandee(statutDisponibilite, promoInfo?.stade ?? null, statutProduitMagasin)
   const argumentaire = construireArgumentaire(typologie, magasin, importance?.presentsChezComparables ?? { total: 0, presents: 0 }, promoInfo, vmh, raisonAbsence, action, statutDisponibilite)
 
@@ -147,7 +151,7 @@ export function produitATravailler(
     typologie,
     raisons: importance?.raisons ?? [],
     presentsChezComparables: importance?.presentsChezComparables ?? { total: 0, presents: 0 },
-    vmhNational: vmh,
+    vmh,
     raisonAbsence,
     argumentaire,
     questionsDecouverte: questionsDecouverte(raisonAbsence),

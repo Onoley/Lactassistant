@@ -2,7 +2,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import { produitATravailler, type ProduitATravailler } from './produit-a-travailler'
 import { prioritesSemaine } from './priorites'
 import type { CritereSimilarite } from './similarity'
-import type { Produit, Promo, RaisonAbsence, StatutProduit, Typologie, VmhNational } from '@/lib/types'
+import type { Produit, Promo, RaisonAbsence, StatutProduit, Typologie, VmhEnseigne, VmhNational } from '@/lib/types'
 
 export function comparerProduitsATravailler(a: ProduitATravailler, b: ProduitATravailler): number {
   const aObligatoire = a.typologie === 'obligatoire' ? 1 : 0
@@ -54,6 +54,11 @@ export async function chargerProduitsATravailler(
     .from('vmh_national')
     .select('*')
     .in('produit_id', manquants.map(p => p.id))
+  const { data: vmhEnseigneLignes } = await supabase
+    .from('vmh_enseigne')
+    .select('*')
+    .eq('enseigne', magasin.enseigne)
+    .in('produit_id', manquants.map(p => p.id))
 
   const promosParProduit = new Map<string, Promo[]>()
   for (const lien of promoLiens ?? []) {
@@ -62,6 +67,7 @@ export async function chargerProduitsATravailler(
     promosParProduit.set(lien.produit_id, liste)
   }
   const vmhParProduit = new Map((vmhLignes ?? []).map(v => [v.produit_id, v as VmhNational]))
+  const vmhEnseigneParProduit = new Map((vmhEnseigneLignes ?? []).map(v => [v.produit_id, v as VmhEnseigne]))
 
   // Momentum : le niveau hebdomadaire de ce magasin, si ce produit y figure.
   const produitsParId = new Map((produits ?? []).map(p => [p.id, p as Produit]))
@@ -92,6 +98,7 @@ export async function chargerProduitsATravailler(
         statutsPourCeProduit,
         promosParProduit.get(produit.id) ?? [],
         vmhParProduit.get(produit.id) ?? null,
+        vmhEnseigneParProduit.get(produit.id) ?? null,
         critere,
         niveauParProduit.get(produit.id) ?? null
       )

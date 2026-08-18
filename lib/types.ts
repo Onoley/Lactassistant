@@ -115,3 +115,16 @@ export interface VmhNational {
   periode_reference: string | null
   updated_at: string
 }
+
+export interface VmhEnseigne {
+  produit_id: string
+  enseigne: string
+  vmh_hyper: number | null
+  vmh_super: number | null
+  dv_hmsm: number | null
+  dv_hyper: number | null
+  dv_super: number | null
+  prix_moyen: number | null
+  periode_reference: string | null
+  updated_at: string
+}

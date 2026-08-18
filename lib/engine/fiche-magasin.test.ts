@@ -11,7 +11,7 @@ function item(overrides: Partial<ProduitATravailler> = {}): ProduitATravailler {
     typologie: null,
     raisons: [],
     presentsChezComparables: { total: 0, presents: 0 },
-    vmhNational: null,
+    vmh: null,
     raisonAbsence: null,
     argumentaire: '',
     questionsDecouverte: [],

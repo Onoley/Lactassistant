@@ -1,8 +1,8 @@
 'use server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
-import { readSpreadsheet, readVmhSheet, parseRows, type ImportError } from './parser'
-import { mapMagasinRow, mapProduitRow, mapPromoRows, mapVmhRow } from './mappers'
+import { readSpreadsheet, readVmhSheet, readVmhEnseigneSheet, parseRows, type ImportError } from './parser'
+import { mapMagasinRow, mapProduitRow, mapPromoRows, mapVmhRow, mapVmhEnseigneRow } from './mappers'
 
 export interface ImportSummary {
   imported: number
@@ -200,4 +200,68 @@ export async function importVmh(formData: FormData): Promise<ImportSummary> {
   // fichier : c'est un export panel toute catégorie, pas seulement LNUF) —
   // ignoré silencieusement par design, ce n'est pas une erreur d'import.
   return { imported: upserts.length, errors: [] }
+}
+
+// Onglets "par enseigne" du même classeur — seules Carrefour, Carrefour
+// Market, Auchan (HM+SM) et U ont un VMH exploitable dans cet export ;
+// Leclerc et Intermarché ont des lignes produit mais la colonne VMH y est
+// entièrement vide, vérifié sur le fichier réel. Elles restent donc sur le
+// repli vmh_national (lib/engine/vmh.ts) tant que la donnée n'existe pas.
+const SHEETS_VMH_ENSEIGNE: { enseigne: string; sheet: string; format: 'hyper' | 'super' | null }[] = [
+  { enseigne: 'Carrefour', sheet: 'CRF', format: null },
+  { enseigne: 'Carrefour Market', sheet: 'CFR MARKET', format: null },
+  { enseigne: 'Auchan', sheet: 'Auchan HM', format: 'hyper' },
+  { enseigne: 'Auchan', sheet: 'Auchan SM', format: 'super' },
+  { enseigne: 'U', sheet: 'U', format: null },
+]
+
+export async function importVmhEnseigne(formData: FormData): Promise<ImportSummary> {
+  await assertAdmin()
+  const file = formData.get('file') as File
+  const buffer = await file.arrayBuffer()
+
+  const admin = createAdminClient()
+  const { data: produits } = await admin.from('produits').select('id, code')
+  const produitIdByEan = new Map((produits ?? []).map(p => [p.code, p.id]))
+
+  let imported = 0
+  const errors: ImportError[] = []
+
+  for (const { enseigne, sheet, format } of SHEETS_VMH_ENSEIGNE) {
+    let periodeReference: string
+    let rows: (string | number | null)[][]
+    try {
+      ;({ periodeReference, rows } = readVmhEnseigneSheet(buffer, sheet))
+    } catch (err) {
+      errors.push({ row: 0, message: (err as Error).message })
+      continue
+    }
+
+    const mapped = rows.map(mapVmhEnseigneRow).filter((v): v is NonNullable<typeof v> => v !== null)
+    const upserts = mapped
+      .map(v => {
+        const produitId = produitIdByEan.get(v.ean)
+        if (!produitId) return null
+        const base = {
+          produit_id: produitId, enseigne,
+          prix_moyen: v.prixMoyen, periode_reference: periodeReference, updated_at: new Date().toISOString(),
+        }
+        // Auchan HM/SM : chaque passe ne renseigne que sa colonne de format,
+        // laissant l'autre intacte (upsert PostgREST ne touche que les
+        // colonnes fournies). Les autres enseignes n'ont pas de ventilation
+        // HM/SM dans l'export : même valeur des deux côtés.
+        if (format === 'hyper') return { ...base, vmh_hyper: v.vmh, dv_hyper: v.dv }
+        if (format === 'super') return { ...base, vmh_super: v.vmh, dv_super: v.dv }
+        return { ...base, vmh_hyper: v.vmh, vmh_super: v.vmh, dv_hmsm: v.dv, dv_hyper: v.dv, dv_super: v.dv }
+      })
+      .filter((v): v is NonNullable<typeof v> => v !== null)
+
+    if (upserts.length > 0) {
+      const { error } = await admin.from('vmh_enseigne').upsert(upserts, { onConflict: 'produit_id,enseigne' })
+      if (error) throw error
+      imported += upserts.length
+    }
+  }
+
+  return { imported, errors }
 }

@@ -273,3 +273,32 @@ export function mapVmhRow(row: (string | number | null)[]): VmhImport | null {
     prixMoyen: versNombreOuNull(row[11]),
   }
 }
+
+export interface VmhEnseigneImport {
+  ean: string
+  vmh: number | null
+  dv: number | null
+  prixMoyen: number | null
+}
+
+const COL_EAN_CAM = 55
+const COL_PRIX_CAM = 60
+const COL_DV_CAM = 70
+const COL_VMH_CAM = 80
+
+// Colonnes fixes des onglets "par enseigne" : chaque métrique est répétée
+// 5x (P4, P5, Dernière Période, Cumul 3 Dernières Périodes, CAM) — on
+// retient la colonne CAM ("Cumul Annuel Mobile", ~12 mois), cohérente avec
+// la vue annuelle du VMH national (Vision CAT).
+export function mapVmhEnseigneRow(row: (string | number | null)[]): VmhEnseigneImport | null {
+  const eanBrut = row[COL_EAN_CAM]
+  const ean = eanBrut !== null && eanBrut !== undefined ? String(eanBrut).trim() : ''
+  if (!/^[0-9]{8,14}$/.test(ean)) return null
+
+  return {
+    ean,
+    vmh: versNombreOuNull(row[COL_VMH_CAM]),
+    dv: versNombreOuNull(row[COL_DV_CAM]),
+    prixMoyen: versNombreOuNull(row[COL_PRIX_CAM]),
+  }
+}

@@ -44,3 +44,21 @@ export function readVmhSheet(buffer: ArrayBuffer): { periodeReference: string; r
 
   return { periodeReference, rows }
 }
+
+// Onglets "par enseigne" (LCL/ITM/CRF/CFR MARKET/Auchan HM/Auchan SM/U) :
+// deux lignes d'en-tête (groupe de métrique, puis période), chaque métrique
+// répétée 5x (P4, P5, Dernière Période, Cumul 3 Dernières Périodes, CAM).
+// La période est lue directement dans la ligne d'en-tête plutôt que sur une
+// cellule fixe, ce format n'ayant pas de cellule dédiée comme Vision CAT.
+export function readVmhEnseigneSheet(buffer: ArrayBuffer, sheetName: string): { periodeReference: string; rows: (string | number | null)[][] } {
+  const workbook = XLSX.read(buffer, { type: 'array' })
+  const sheet = workbook.Sheets[sheetName]
+  if (!sheet) throw new Error(`Onglet "${sheetName}" introuvable dans le fichier`)
+
+  const [lignePeriodes] = XLSX.utils.sheet_to_json(sheet, { header: 1, range: 8, raw: true, defval: null }) as (string | number | null)[][]
+  const periodeReference = String(lignePeriodes?.[80] ?? '').trim()
+
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, range: 9, raw: true, defval: null }) as (string | number | null)[][]
+
+  return { periodeReference, rows }
+}

@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { importMagasins, importProduits, importPromos, importVmh, type ImportSummary } from '@/lib/import/actions'
+import { importMagasins, importProduits, importPromos, importVmh, importVmhEnseigne, type ImportSummary } from '@/lib/import/actions'
 import { ENSEIGNES } from '@/lib/types'
 
 function ImportForm({
@@ -72,6 +72,7 @@ export default function ImportPage() {
         </select>
       </ImportForm>
       <ImportForm label="VMH national (export panel)" action={importVmh} />
+      <ImportForm label="VMH par enseigne (Carrefour, Carrefour Market, Auchan, U)" action={importVmhEnseigne} />
     </div>
   )
 }

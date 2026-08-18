@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapMagasinRow, mapProduitRow, mapPromoRows, mapVmhRow } from './mappers'
+import { mapMagasinRow, mapProduitRow, mapPromoRows, mapVmhRow, mapVmhEnseigneRow } from './mappers'
 
 describe('mapMagasinRow', () => {
   function ligne(overrides: Partial<Record<string, string>> = {}) {
@@ -155,5 +155,42 @@ describe('mapVmhRow', () => {
     const result = mapVmhRow(ligneReelle({ 18: null, 20: null }))
     expect(result?.vmhHyper).toBeNull()
     expect(result?.vmhSuper).toBeNull()
+  })
+})
+
+describe('mapVmhEnseigneRow', () => {
+  // Colonnes 0-indexées, copiées de l'onglet "CRF" réel de
+  // "vmh et produit  2.xlsx" : 55 Desc EAN (CAM), 60 Prix Moyen Unite (CAM),
+  // 70 DV (CAM), 80 VMH Unite Ajustees (CAM).
+  function ligneReelle(overrides: Partial<Record<number, string | number | null>> = {}): (string | number | null)[] {
+    const base: (string | number | null)[] = new Array(106).fill(null)
+    base[55] = '3023290008454'
+    base[60] = 2.887085099401132
+    base[70] = 59.18717625944746
+    base[80] = 7.150832774351108
+    for (const [i, v] of Object.entries(overrides)) {
+      const idx = Number(i)
+      if (v !== undefined) base[idx] = v
+    }
+    return base
+  }
+
+  it('extrait les champs pertinents depuis une ligne réelle', () => {
+    const result = mapVmhEnseigneRow(ligneReelle())
+    expect(result).not.toBeNull()
+    expect(result?.ean).toBe('3023290008454')
+    expect(result?.vmh).toBeCloseTo(7.15, 1)
+    expect(result?.dv).toBeCloseTo(59.19, 1)
+    expect(result?.prixMoyen).toBeCloseTo(2.887, 3)
+  })
+
+  it('ignore une ligne sans EAN', () => {
+    expect(mapVmhEnseigneRow(ligneReelle({ 55: null }))).toBeNull()
+  })
+
+  it('renvoie null pour un VMH absent (enseigne sans donnée VMH, ex. Leclerc/Intermarché)', () => {
+    const result = mapVmhEnseigneRow(ligneReelle({ 80: null }))
+    expect(result?.vmh).toBeNull()
+    expect(result?.dv).toBeCloseTo(59.19, 1)
   })
 })
