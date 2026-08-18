@@ -32,6 +32,11 @@ export interface Produit {
   gamme?: string | null
   parfum?: string | null
   format?: string | null
+  produit_canonique_id: string | null
+  famille: string | null
+  segment: string | null
+  statut_catalogue: 'permanent' | 'a_qualifier' | 'variante_promo' | 'arrete'
+  type_liaison: 'conditionnement_promo' | 'ancien_ean' | 'repackaging' | null
 }
 
 export interface PrioriteProduit {
@@ -44,13 +49,14 @@ export type Enseigne = (typeof ENSEIGNES)[number]
 
 export type StatutDisponibilite = 'commandable' | 'non_commandable' | 'arret_industriel' | 'en_attente_referencement'
 
-export type Typologie = 'obligatoire' | 'picking'
+export type Typologie = string
 
 export interface ProduitEnseigne {
   produit_id: string
   enseigne: string
   typologie: Typologie | null
   statut_disponibilite: StatutDisponibilite
+  actif: boolean
 }
 
 export interface Promo {
