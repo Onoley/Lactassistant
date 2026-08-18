@@ -6,7 +6,7 @@ export default async function ProduitsPage() {
   const supabase = createServerClient()
   const [{ data: produits }, { data: produitsEnseigne }, { data: priorites }] = await Promise.all([
     supabase.from('produits').select('*').order('nom'),
-    supabase.from('produits_enseigne').select('*'),
+    supabase.from('produits_enseigne').select('*').eq('actif', true),
     supabase.from('priorites_produits').select('*'),
   ])
 
