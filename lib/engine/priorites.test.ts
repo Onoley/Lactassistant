@@ -14,6 +14,10 @@ function promo(overrides: Partial<Promo> = {}): Promo {
   return { id: 'pr1', code: 'PR1', enseigne: 'Carrefour', mecanique: '-20%', date_installation: null, date_debut_vente: '2026-08-20', date_constat: null, ...overrides }
 }
 
+function produit(id: string, overrides: Partial<Produit> = {}): Produit {
+  return { id, code: id.toUpperCase(), nom: `Produit ${id}`, categorie: null, produit_canonique_id: null, famille: null, segment: null, statut_catalogue: 'permanent', type_liaison: null, ...overrides }
+}
+
 describe('prioritesSemaine', () => {
   it('ignore un Top 20 sans promo ni rupture (aucune donnée de rang ne lui est même fournie)', () => {
     const mag = magasin('1')
@@ -166,5 +170,35 @@ describe('prioritesSemaine', () => {
     const result = prioritesSemaine([magA, magB], statuts, produitsParId, [], new Map(), new Date('2026-08-17'))
     expect(result).toHaveLength(2)
     expect(result.map(r => r.magasin.id).sort()).toEqual(['1', '2'])
+  })
+
+  it('un statut signalé sur une variante promo compte pour le produit canonique', () => {
+    const canonique = produit('c1', { nom: 'Permanent' })
+    const variante = produit('v1', { nom: 'Variante promo', produit_canonique_id: 'c1' })
+    const produitsParId = new Map([['c1', canonique], ['v1', variante]])
+    const m = magasin('1')
+    // Statut "manquant" signalé contre v1 (l'EAN promo), pas contre c1.
+    const statuts: StatutProduitMagasin[] = [
+      { magasin_id: '1', produit_id: 'v1', statut: 'manquant', signale_par: null, signale_at: '', raison_absence: null },
+    ]
+    const promo = { id: 'pr1', code: 'PR1', enseigne: 'Carrefour', mecanique: '-20%', date_installation: null, date_debut_vente: '2026-09-01', date_constat: null }
+    const promosParProduitId = new Map([['v1', [promo]]])
+
+    const resultats = prioritesSemaine([m], statuts, produitsParId, [], promosParProduitId)
+    expect(resultats.some(r => r.produit.id === 'c1')).toBe(true)
+  })
+
+  it('deux variantes promo du même produit canonique ne créent qu\'une seule priorité', () => {
+    const canonique = produit('c1')
+    const varianteA = produit('vA', { produit_canonique_id: 'c1' })
+    const varianteB = produit('vB', { produit_canonique_id: 'c1' })
+    const produitsParId = new Map([['c1', canonique], ['vA', varianteA], ['vB', varianteB]])
+    const m = magasin('1')
+    const promoA = { id: 'pA', code: 'A', enseigne: 'Carrefour', mecanique: 'A', date_installation: null, date_debut_vente: '2026-09-01', date_constat: null, op_trade: 'x' }
+    const promoB = { id: 'pB', code: 'B', enseigne: 'Carrefour', mecanique: 'B', date_installation: null, date_debut_vente: '2026-09-05', date_constat: null, op_trade: 'x' }
+    const promosParProduitId = new Map([['c1', [promoA, promoB]]]) // déjà résolu au canonique, comme après l'étape 3
+
+    const resultats = prioritesSemaine([m], [], produitsParId, [], promosParProduitId)
+    expect(resultats.filter(r => r.produit.id === 'c1')).toHaveLength(1)
   })
 })

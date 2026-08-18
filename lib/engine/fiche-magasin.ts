@@ -1,6 +1,6 @@
 import { createServerClient } from '@/lib/supabase/server'
 import { produitATravailler, type ProduitATravailler } from './produit-a-travailler'
-import { prioritesSemaine } from './priorites'
+import { prioritesSemaine, resoudreCanonique } from './priorites'
 import type { CritereSimilarite } from './similarity'
 import type { Produit, Promo, RaisonAbsence, StatutProduit, Typologie, VmhEnseigne, VmhNational } from '@/lib/types'
 
@@ -25,9 +25,10 @@ export async function chargerProduitsATravailler(
     supabase.from('produits_enseigne').select('*').eq('enseigne', magasin.enseigne),
   ])
 
+  const produitsParId = new Map((produits ?? []).map(p => [p.id, p as Produit]))
   const prioriteParProduit = new Map((priorites ?? []).map(p => [p.produit_id, p]))
   const produitEnseigneParProduit = new Map((produitsEnseigne ?? []).map(pe => [pe.produit_id, pe]))
-  const statutParProduit = new Map((statuts ?? []).map(s => [s.produit_id, s]))
+  const statutParProduit = new Map((statuts ?? []).map(s => [resoudreCanonique(s.produit_id, produitsParId), s]))
   const manquants = (produits ?? []).filter(p => {
     const s = statutParProduit.get(p.id)?.statut
     return s === 'manquant' || s === 'rupture'
@@ -62,15 +63,15 @@ export async function chargerProduitsATravailler(
 
   const promosParProduit = new Map<string, Promo[]>()
   for (const lien of promoLiens ?? []) {
-    const liste = promosParProduit.get(lien.produit_id) ?? []
+    const idEffectif = resoudreCanonique(lien.produit_id, produitsParId)
+    const liste = promosParProduit.get(idEffectif) ?? []
     liste.push(lien.promos as unknown as Promo)
-    promosParProduit.set(lien.produit_id, liste)
+    promosParProduit.set(idEffectif, liste)
   }
   const vmhParProduit = new Map((vmhLignes ?? []).map(v => [v.produit_id, v as VmhNational]))
   const vmhEnseigneParProduit = new Map((vmhEnseigneLignes ?? []).map(v => [v.produit_id, v as VmhEnseigne]))
 
   // Momentum : le niveau hebdomadaire de ce magasin, si ce produit y figure.
-  const produitsParId = new Map((produits ?? []).map(p => [p.id, p as Produit]))
   const prioritesHebdoMagasin = prioritesSemaine(
     [magasin], statuts ?? [], produitsParId, produitsEnseigne ?? [], promosParProduit
   )
@@ -83,7 +84,9 @@ export async function chargerProduitsATravailler(
       const produitEnseigne = produitEnseigneParProduit.get(produit.id)
 
       const statutsPourCeProduit = new Map<string, StatutProduit>(
-        (statutsSecteur ?? []).filter(s => s.produit_id === produit.id).map(s => [s.magasin_id, s.statut as StatutProduit])
+        (statutsSecteur ?? [])
+          .filter(s => resoudreCanonique(s.produit_id, produitsParId) === produit.id)
+          .map(s => [s.magasin_id, s.statut as StatutProduit])
       )
 
       return produitATravailler(

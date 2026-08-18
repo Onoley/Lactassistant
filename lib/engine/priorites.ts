@@ -16,6 +16,13 @@ export interface PrioriteHebdo {
 
 const ORDRE_NIVEAU: Record<NiveauPriorite, number> = { a_anticiper: 1, cette_semaine: 2, urgent: 3 }
 
+// Un produit_id issu de promo_produits ou statuts_produit_magasin peut être
+// une variante d'emballage promo (EAN distinct du produit réel en rayon) —
+// résout vers le produit canonique quand un lien existe, sinon no-op.
+export function resoudreCanonique(produitId: string, produitsParId: Map<string, Produit>): string {
+  return produitsParId.get(produitId)?.produit_canonique_id ?? produitId
+}
+
 function jalonsFuturs(promo: Promo, aujourdHui: Date): number[] {
   return [promo.date_installation, promo.date_debut_vente, promo.date_fin_vente]
     .filter((d): d is string => Boolean(d))
@@ -144,8 +151,21 @@ export function prioritesSemaine(
 
   const statutParMagasinEtProduit = new Map<string, Map<string, StatutProduit>>()
   for (const s of statuts) {
+    const idEffectif = resoudreCanonique(s.produit_id, produitsParId)
     if (!statutParMagasinEtProduit.has(s.magasin_id)) statutParMagasinEtProduit.set(s.magasin_id, new Map())
-    statutParMagasinEtProduit.get(s.magasin_id)!.set(s.produit_id, s.statut)
+    statutParMagasinEtProduit.get(s.magasin_id)!.set(idEffectif, s.statut)
+  }
+
+  // promosParProduitId peut encore référencer l'EAN d'une variante promo (pas
+  // encore résolu par l'appelant) — fusionne vers le produit canonique ici
+  // aussi, en plus de la résolution faite en amont (Step 3/6 des appelants) :
+  // no-op idempotent si déjà résolu, donc sans risque de double comptage.
+  const promosParProduitIdResolu = new Map<string, Promo[]>()
+  for (const [produitId, promos] of promosParProduitId) {
+    const idEffectif = resoudreCanonique(produitId, produitsParId)
+    const liste = promosParProduitIdResolu.get(idEffectif) ?? []
+    liste.push(...promos)
+    promosParProduitIdResolu.set(idEffectif, liste)
   }
 
   const resultats: ResultatInterne[] = []
@@ -158,7 +178,7 @@ export function prioritesSemaine(
     // statut, donc implicitement présents) — une Opé Trade se suit même
     // quand le produit est déjà en rayon.
     const produitIds = new Set<string>(statutsMagasin.keys())
-    for (const [produitId, promos] of promosParProduitId) {
+    for (const [produitId, promos] of promosParProduitIdResolu) {
       if (promos.some(p => p.enseigne === magasin.enseigne && p.op_trade)) produitIds.add(produitId)
     }
 
@@ -166,7 +186,7 @@ export function prioritesSemaine(
       const produit = produitsParId.get(produitId)
       if (!produit) continue
       const statutProduitMagasin = statutsMagasin.get(produitId) ?? 'present'
-      const promosApplicables = (promosParProduitId.get(produitId) ?? []).filter(p => p.enseigne === magasin.enseigne)
+      const promosApplicables = (promosParProduitIdResolu.get(produitId) ?? []).filter(p => p.enseigne === magasin.enseigne)
 
       const meilleur = meilleurCandidat(candidatsPourProduit(statutProduitMagasin, promosApplicables, aujourdHui))
       if (!meilleur) continue

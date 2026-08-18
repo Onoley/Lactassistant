@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
-import { prioritesSemaine } from '@/lib/engine/priorites'
+import { prioritesSemaine, resoudreCanonique } from '@/lib/engine/priorites'
 import { chargerTousLesPromoLiens } from '@/lib/engine/promo-liens'
 import { dateDuJour, decalerSemaine, numeroSemaineCourante } from '@/lib/semaine'
 import { CalendrierSemaine } from './calendrier-semaine'
@@ -39,9 +39,10 @@ export default async function SemainePage({ searchParams }: { searchParams: Prom
   const produitsParId = new Map<string, Produit>((produits ?? []).map(p => [p.id, p]))
   const promosParProduitId = new Map<string, Promo[]>()
   for (const lien of promoLiens) {
-    const liste = promosParProduitId.get(lien.produit_id) ?? []
+    const idEffectif = resoudreCanonique(lien.produit_id, produitsParId)
+    const liste = promosParProduitId.get(idEffectif) ?? []
     liste.push(lien.promos as unknown as Promo)
-    promosParProduitId.set(lien.produit_id, liste)
+    promosParProduitId.set(idEffectif, liste)
   }
 
   const prioritesHebdo = prioritesSemaine(
