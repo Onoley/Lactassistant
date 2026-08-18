@@ -644,6 +644,11 @@ async function chargerDiffsPlanDeVente(buffer: ArrayBuffer, admin: ReturnType<ty
   return { diffs, ongletsManquants }
 }
 
+export interface PreviewPlanDeVente {
+  parEnseigne: DiffEnseigne[]
+  onglets_manquants: string[]
+}
+
 export async function previewImportPlanDeVente(formData: FormData): Promise<PreviewPlanDeVente> {
   await assertAdmin()
   const file = formData.get('file') as File
@@ -805,7 +810,7 @@ git commit -m "feat: import plan de vente avec aperçu, désactivation et histor
 
 ```sql
 select count(*) from produits where produit_canonique_id is not null; -- expect 60
-select count(*) from produits where statut_catalogue = 'a_qualifier'; -- expect 20
+select count(*) from produits where statut_catalogue = 'a_qualifier'; -- expect 16
 select count(*) from produits where statut_catalogue = 'variante_promo' and produit_canonique_id is null; -- expect 0 (consistency check)
 ```
 
