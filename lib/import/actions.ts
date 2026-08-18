@@ -1,8 +1,10 @@
 'use server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
-import { readSpreadsheet, readVmhSheet, readVmhEnseigneSheet, parseRows, type ImportError } from './parser'
-import { mapMagasinRow, mapProduitRow, mapPromoRows, mapVmhRow, mapVmhEnseigneRow } from './mappers'
+import { readSpreadsheet, readVmhSheet, readVmhEnseigneSheet, readPlanDeVenteSheet, parseRows, type ImportError } from './parser'
+import { mapMagasinRow, mapProduitRow, mapPromoRows, mapVmhRow, mapVmhEnseigneRow, mapPlanDeVenteRow } from './mappers'
+import { calculerDiffPlanDeVente, type DiffEnseigne } from './plan-de-vente-diff'
+export type { DiffEnseigne }
 
 export interface ImportSummary {
   imported: number
@@ -264,4 +266,95 @@ export async function importVmhEnseigne(formData: FormData): Promise<ImportSumma
   }
 
   return { imported, errors }
+}
+
+const ENSEIGNES_PLAN_DE_VENTE: { sheet: string; enseigne: string }[] = [
+  { sheet: 'Auchan', enseigne: 'Auchan' },
+  { sheet: 'Carrefour', enseigne: 'Carrefour' },
+  { sheet: 'Carrefour Market', enseigne: 'Carrefour Market' },
+  { sheet: 'Intermarché', enseigne: 'Intermarche' },
+  { sheet: 'Leclerc', enseigne: 'Leclerc' },
+  { sheet: 'Système U', enseigne: 'U' },
+]
+
+async function chargerDiffsPlanDeVente(buffer: ArrayBuffer, admin: ReturnType<typeof createAdminClient>) {
+  const { data: produits } = await admin.from('produits').select('id, code')
+  const produitIdParEan = new Map((produits ?? []).map(p => [p.code, p.id]))
+
+  const ongletsManquants: string[] = []
+  const diffs: ReturnType<typeof calculerDiffPlanDeVente>[] = []
+
+  for (const { sheet, enseigne } of ENSEIGNES_PLAN_DE_VENTE) {
+    let rows: Record<string, string>[]
+    try {
+      rows = readPlanDeVenteSheet(buffer, sheet)
+    } catch {
+      ongletsManquants.push(sheet)
+      continue
+    }
+    const lignes = rows.map(mapPlanDeVenteRow).filter((l): l is NonNullable<typeof l> => l !== null)
+    const { data: assortimentActuel } = await admin
+      .from('produits_enseigne')
+      .select('produit_id, typologie, actif')
+      .eq('enseigne', enseigne)
+    const diff = calculerDiffPlanDeVente(lignes, enseigne, produitIdParEan, assortimentActuel ?? [])
+    if (diff.resume.references === 0 && (assortimentActuel ?? []).some(a => a.actif)) {
+      throw new Error(`${enseigne} : le fichier ne contient aucune référence exploitable alors que l'enseigne a un assortiment existant — import refusé pour éviter une désactivation silencieuse.`)
+    }
+    diffs.push(diff)
+  }
+
+  return { diffs, ongletsManquants }
+}
+
+export interface PreviewPlanDeVente {
+  parEnseigne: DiffEnseigne[]
+  onglets_manquants: string[]
+}
+
+export async function previewImportPlanDeVente(formData: FormData): Promise<PreviewPlanDeVente> {
+  await assertAdmin()
+  const file = formData.get('file') as File
+  const admin = createAdminClient()
+  const { diffs, ongletsManquants } = await chargerDiffsPlanDeVente(await file.arrayBuffer(), admin)
+  return { parEnseigne: diffs.map(d => d.resume), onglets_manquants: ongletsManquants }
+}
+
+export async function confirmerImportPlanDeVente(formData: FormData): Promise<{ resume: DiffEnseigne[] }> {
+  await assertAdmin()
+  const file = formData.get('file') as File
+  const admin = createAdminClient()
+  const { diffs, ongletsManquants } = await chargerDiffsPlanDeVente(await file.arrayBuffer(), admin)
+  if (ongletsManquants.length > 0) {
+    throw new Error(`Onglets manquants, import refusé : ${ongletsManquants.join(', ')}`)
+  }
+
+  // Transactionnel : execute_sql direct n'est pas exposé côté client Supabase-js,
+  // donc chaque enseigne s'applique séquentiellement ; en cas d'erreur sur une
+  // enseigne, les précédentes de CETTE exécution restent appliquées (limite
+  // connue du client REST, pas de vraie transaction multi-requêtes). Documenté
+  // ici plutôt que promettre une atomicité que ce client ne peut pas tenir.
+  for (const diff of diffs) {
+    if (diff.aActiver.length > 0) {
+      const { error } = await admin.from('produits_enseigne').upsert(
+        diff.aActiver.map(l => ({ produit_id: l.produit_id, enseigne: l.enseigne, typologie: l.typologie, actif: true })),
+        { onConflict: 'produit_id,enseigne' }
+      )
+      if (error) throw error
+    }
+    if (diff.aDesactiverProduitIds.length > 0) {
+      const { error } = await admin.from('produits_enseigne')
+        .update({ actif: false })
+        .eq('enseigne', diff.resume.enseigne)
+        .in('produit_id', diff.aDesactiverProduitIds)
+      if (error) throw error
+    }
+  }
+
+  const { error: histError } = await admin.from('imports_plan_de_vente').insert({
+    resume: Object.fromEntries(diffs.map(d => [d.resume.enseigne, d.resume])),
+  })
+  if (histError) throw histError
+
+  return { resume: diffs.map(d => d.resume) }
 }
