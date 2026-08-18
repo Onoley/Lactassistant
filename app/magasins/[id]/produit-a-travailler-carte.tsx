@@ -4,6 +4,7 @@ import type { ProduitATravailler } from '@/lib/engine/produit-a-travailler'
 import { definirRaisonAbsence } from '@/lib/statuts/actions'
 import { COULEUR_NIVEAU, LIBELLE_NIVEAU } from '@/components/priorites-liste'
 import type { RaisonAbsence } from '@/lib/types'
+import { nomComplet } from '@/lib/engine/nom-complet'
 
 const LIBELLES_RAISON: Record<RaisonAbsence, string> = {
   pas_de_place_rayon: 'Pas de place en rayon',
@@ -27,7 +28,7 @@ export function ProduitATravaillerCarte({ magasinId, item }: { magasinId: string
     <div className={`border rounded p-3 space-y-2 ${pending ? 'opacity-50' : ''}`}>
       <div className="flex items-center justify-between">
         <div>
-          <span className="font-medium">{item.produit.nom}</span>
+          <span className="font-medium">{nomComplet(item.produit)}</span>
           <span className="text-xs text-gray-500 ml-2">{item.produit.code}</span>
           {item.rang && <span className="text-xs text-gray-500 ml-2">Top {item.rang}</span>}
           {item.typologie === 'obligatoire' && (

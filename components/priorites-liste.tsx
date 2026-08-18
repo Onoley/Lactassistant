@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import type { PrioriteHebdo, NiveauPriorite } from '@/lib/engine/priorites'
 import { regrouperParPromo } from '@/lib/engine/regrouper-priorites'
+import { nomComplet } from '@/lib/engine/nom-complet'
 
 export const LIBELLE_NIVEAU: Record<NiveauPriorite, string> = { urgent: 'Urgent', cette_semaine: 'Cette semaine', a_anticiper: 'À anticiper' }
 export const COULEUR_NIVEAU: Record<NiveauPriorite, string> = {
@@ -91,7 +92,7 @@ export function PrioritesListe({
               <p className="font-medium">{g.magasin.nom} — {LIBELLE_NIVEAU[g.niveau]}</p>
               {g.promo && <p className="text-sm font-semibold">{g.promo.theme ?? g.promo.mecanique}</p>}
               <p className="text-sm">{g.raison}</p>
-              <p className="text-sm text-gray-600">{g.produits.map(pr => pr.nom).join(', ')}</p>
+              <p className="text-sm text-gray-600">{g.produits.map(nomComplet).join(', ')}</p>
             </li>
           ))}
         </ul>
@@ -104,7 +105,7 @@ export function PrioritesListe({
                 <td>{g.magasin.nom}</td>
                 <td>{emailParSecteur?.get(g.magasin.secteur_id) ?? '-'}</td>
                 <td>{g.promo ? (g.promo.theme ?? g.promo.mecanique) : '-'}</td>
-                <td>{g.produits.map(pr => pr.nom).join(', ')}</td>
+                <td>{g.produits.map(nomComplet).join(', ')}</td>
                 <td><span className={`px-2 py-0.5 rounded border text-xs ${COULEUR_NIVEAU[g.niveau]}`}>{LIBELLE_NIVEAU[g.niveau]}</span></td>
                 <td>{g.raison}</td>
               </tr>

@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import type { Produit, StatutProduit } from '@/lib/types'
 import { StatutSelect } from './statut-select'
+import { nomComplet } from '@/lib/engine/nom-complet'
 
 export function AssortimentTable({
   magasinId,
@@ -33,7 +34,7 @@ export function AssortimentTable({
         <tbody>
           {filtres.map(p => (
             <tr key={p.id}>
-              <td>{p.nom}</td>
+              <td>{nomComplet(p)}</td>
               <td>
                 <StatutSelect magasinId={magasinId} produitId={p.id} statutActuel={statutParProduit.get(p.id) ?? 'present'} />
               </td>

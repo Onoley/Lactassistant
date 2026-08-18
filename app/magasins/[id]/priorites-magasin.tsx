@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import type { PrioriteHebdo } from '@/lib/engine/priorites'
 import { COULEUR_NIVEAU, LIBELLE_NIVEAU } from '@/components/priorites-liste'
+import { nomComplet } from '@/lib/engine/nom-complet'
 
 export function PrioritesMagasin({ priorites }: { priorites: PrioriteHebdo[] }) {
   const [ouvertes, setOuvertes] = useState<Set<number>>(new Set())
@@ -21,7 +22,7 @@ export function PrioritesMagasin({ priorites }: { priorites: PrioriteHebdo[] }) 
       {priorites.map((p, i) => (
         <div key={`${p.produit.id}-${i}`} className={`border rounded p-2 ${COULEUR_NIVEAU[p.niveau]}`}>
           <div className="flex items-center justify-between">
-            <span className="font-medium">{p.produit.nom} — {LIBELLE_NIVEAU[p.niveau]}</span>
+            <span className="font-medium">{nomComplet(p.produit)} — {LIBELLE_NIVEAU[p.niveau]}</span>
             <button onClick={() => toggle(i)} className="text-xs underline">
               {ouvertes.has(i) ? 'Masquer' : 'Voir'} les raisons
             </button>

@@ -2,6 +2,7 @@
 import { useState, useTransition } from 'react'
 import { definirAssortiment, definirPriorite, definirStatutDisponibilite, definirTypologie, supprimerProduit } from '@/lib/produits/actions'
 import { ENSEIGNES, type Produit, type StatutDisponibilite, type Typologie } from '@/lib/types'
+import { nomComplet } from '@/lib/engine/nom-complet'
 
 const LIBELLES_STATUT: Record<StatutDisponibilite, string> = {
   commandable: 'Commandable',
@@ -71,7 +72,7 @@ export function ProduitRow({
   return (
     <tr className={pending ? 'opacity-50' : ''}>
       <td className="whitespace-nowrap font-mono text-xs">{produit.code}</td>
-      <td>{produit.nom}</td>
+      <td>{nomComplet(produit)}</td>
       <td className="text-xs text-gray-500">{[produit.marque, produit.parfum, produit.format].filter(Boolean).join(' · ') || produit.categorie}</td>
       <td>
         <select value={rang ?? ''} onChange={e => handleRangChange(e.target.value)} className="border rounded px-1 py-0.5 text-sm">
