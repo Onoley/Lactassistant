@@ -62,3 +62,14 @@ export function readVmhEnseigneSheet(buffer: ArrayBuffer, sheetName: string): { 
 
   return { periodeReference, rows }
 }
+
+// Lit l'onglet "plan de vente" d'une enseigne : titre (ligne 1), sous-titre
+// avec compteur (ligne 2), ligne vide (ligne 3), en-têtes (ligne 4), données
+// à partir de la ligne 5. TYPOLOGIE est absente pour les enseignes qui n'ont
+// pas cette donnée (Intermarché/Leclerc/Système U).
+export function readPlanDeVenteSheet(buffer: ArrayBuffer, sheetName: string): Record<string, string>[] {
+  const workbook = XLSX.read(buffer, { type: 'array' })
+  const sheet = workbook.Sheets[sheetName]
+  if (!sheet) throw new Error(`Onglet "${sheetName}" introuvable dans le fichier`)
+  return XLSX.utils.sheet_to_json(sheet, { range: 3, defval: '', raw: false })
+}

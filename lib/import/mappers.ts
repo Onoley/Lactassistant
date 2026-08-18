@@ -302,3 +302,23 @@ export function mapVmhEnseigneRow(row: (string | number | null)[]): VmhEnseigneI
     prixMoyen: versNombreOuNull(row[COL_PRIX_CAM]),
   }
 }
+
+export interface PlanDeVenteImport {
+  ean: string
+  nom: string
+  famille: string | null
+  segment: string | null
+  typologie: string | null
+}
+
+export function mapPlanDeVenteRow(row: Record<string, string>): PlanDeVenteImport | null {
+  const ean = row['EAN PRODUIT']?.trim()
+  if (!ean) return null
+  return {
+    ean,
+    nom: row['NOM DU PRODUIT']?.trim() ?? '',
+    famille: row['FAMILLE']?.trim() || null,
+    segment: row['SEGMENT']?.trim() || null,
+    typologie: row['TYPOLOGIE']?.trim() || null,
+  }
+}

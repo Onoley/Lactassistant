@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapMagasinRow, mapProduitRow, mapPromoRows, mapVmhRow, mapVmhEnseigneRow } from './mappers'
+import { mapMagasinRow, mapPlanDeVenteRow, mapProduitRow, mapPromoRows, mapVmhRow, mapVmhEnseigneRow } from './mappers'
 
 describe('mapMagasinRow', () => {
   function ligne(overrides: Partial<Record<string, string>> = {}) {
@@ -192,5 +192,32 @@ describe('mapVmhEnseigneRow', () => {
     const result = mapVmhEnseigneRow(ligneReelle({ 80: null }))
     expect(result?.vmh).toBeNull()
     expect(result?.dv).toBeCloseTo(59.19, 1)
+  })
+})
+
+describe('mapPlanDeVenteRow', () => {
+  function ligne(overrides: Partial<Record<string, string>> = {}) {
+    return {
+      'EAN PRODUIT': '3023290038147',
+      'NOM DU PRODUIT': "SIGGI'S CITRON X 2 140 GR STD",
+      'FAMILLE': 'Skyr',
+      'SEGMENT': 'Skyr',
+      'TYPOLOGIE': 'MN',
+      ...overrides,
+    }
+  }
+
+  it('extrait les champs pertinents', () => {
+    const result = mapPlanDeVenteRow(ligne())
+    expect(result).toEqual({ ean: '3023290038147', nom: "SIGGI'S CITRON X 2 140 GR STD", famille: 'Skyr', segment: 'Skyr', typologie: 'MN' })
+  })
+
+  it('renvoie typologie null quand la colonne est absente ou vide (Intermarché/Leclerc/Système U)', () => {
+    const result = mapPlanDeVenteRow(ligne({ TYPOLOGIE: '' }))
+    expect(result?.typologie).toBeNull()
+  })
+
+  it('ignore une ligne sans EAN', () => {
+    expect(mapPlanDeVenteRow(ligne({ 'EAN PRODUIT': '' }))).toBeNull()
   })
 })
