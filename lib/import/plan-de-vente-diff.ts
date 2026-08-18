@@ -14,6 +14,8 @@ export interface LigneAssortimentAAppliquer {
   produit_id: string
   enseigne: string
   typologie: string | null
+  famille: string | null
+  segment: string | null
 }
 
 export function calculerDiffPlanDeVente(
@@ -21,7 +23,7 @@ export function calculerDiffPlanDeVente(
   enseigne: string,
   produitIdParEan: Map<string, string>,
   assortimentActuel: { produit_id: string; typologie: string | null; actif: boolean }[]
-): { resume: DiffEnseigne; aActiver: LigneAssortimentAAppliquer[]; aDesactiverProduitIds: string[] } {
+): { resume: DiffEnseigne; aActiver: LigneAssortimentAAppliquer[]; aDesactiverProduitIds: string[]; lignesResolues: LigneAssortimentAAppliquer[] } {
   const eanInconnus: string[] = []
   const doublons: string[] = []
   const vus = new Set<string>()
@@ -38,7 +40,7 @@ export function calculerDiffPlanDeVente(
       eanInconnus.push(ligne.ean)
       continue
     }
-    parProduitId.set(produitId, { produit_id: produitId, enseigne, typologie: ligne.typologie })
+    parProduitId.set(produitId, { produit_id: produitId, enseigne, typologie: ligne.typologie, famille: ligne.famille, segment: ligne.segment })
   }
 
   const actuelParProduitId = new Map(assortimentActuel.map(a => [a.produit_id, a]))
@@ -74,5 +76,6 @@ export function calculerDiffPlanDeVente(
     },
     aActiver,
     aDesactiverProduitIds,
+    lignesResolues: [...parProduitId.values()],
   }
 }

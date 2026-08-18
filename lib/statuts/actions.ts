@@ -24,10 +24,13 @@ export async function definirRaisonAbsence(magasinId: string, produitId: string,
   const profile = await getCurrentProfile(supabase)
   if (!profile) throw new Error('Non authentifié')
 
+  const { data: produit } = await supabase.from('produits').select('produit_canonique_id').eq('id', produitId).single()
+  const idEffectif = produit?.produit_canonique_id ?? produitId
+
   const { error } = await supabase.from('statuts_produit_magasin')
     .update({ raison_absence: raison })
     .eq('magasin_id', magasinId)
-    .eq('produit_id', produitId)
+    .eq('produit_id', idEffectif)
   if (error) throw error
   revalidatePath(`/magasins/${magasinId}`)
 }

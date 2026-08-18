@@ -43,12 +43,15 @@ export async function definirAssortiment(produitId: string, enseigne: string, pr
   const admin = createAdminClient()
   if (present) {
     const { error } = await admin.from('produits_enseigne').upsert(
-      { produit_id: produitId, enseigne, typologie: null },
+      { produit_id: produitId, enseigne, actif: true },
       { onConflict: 'produit_id,enseigne' }
     )
     if (error) throw error
   } else {
-    const { error } = await admin.from('produits_enseigne').delete().eq('produit_id', produitId).eq('enseigne', enseigne)
+    const { error } = await admin.from('produits_enseigne')
+      .update({ actif: false })
+      .eq('produit_id', produitId)
+      .eq('enseigne', enseigne)
     if (error) throw error
   }
   revalidatePath('/admin/produits')

@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
 import type { Produit, Promo, StatutProduit } from '@/lib/types'
 import { chargerProduitsATravailler } from '@/lib/engine/fiche-magasin'
-import { prioritesSemaine } from '@/lib/engine/priorites'
+import { prioritesSemaine, resoudreCanonique } from '@/lib/engine/priorites'
 import { PdlBloc } from './pdl-bloc'
 import { PrioritesMagasin } from './priorites-magasin'
 import { ProduitATravaillerCarte } from './produit-a-travailler-carte'
@@ -27,9 +27,9 @@ export default async function FicheMagasinPage({ params }: { params: Promise<{ i
     supabase.from('priorites_produits').select('*'),
   ])
 
-  const statutParProduit = new Map((statuts ?? []).map(s => [s.produit_id, s.statut as StatutProduit]))
   const rangParProduit = new Map((prioritesProduits ?? []).map(p => [p.produit_id, p.rang as 20 | 50 | 70]))
   const produitsParId = new Map<string, Produit>((produits ?? []).map(p => [p.id, p]))
+  const statutParProduit = new Map((statuts ?? []).map(s => [resoudreCanonique(s.produit_id, produitsParId), s.statut as StatutProduit]))
   const typologieParProduit = new Map((produitsEnseigne ?? []).map(pe => [pe.produit_id, pe.typologie]))
   const produitsAssortiment = (produits ?? []).filter(p => typologieParProduit.has(p.id))
   const promosParProduitId = new Map<string, Promo[]>()

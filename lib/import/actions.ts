@@ -351,6 +351,24 @@ export async function confirmerImportPlanDeVente(formData: FormData): Promise<{ 
     }
   }
 
+  // famille/segment : écrits pour CHAQUE ligne résolue (pas seulement celles
+  // avec un delta d'activation) sinon un ré-import idempotent n'écrirait rien
+  // — dernière enseigne de ENSEIGNES_PLAN_DE_VENTE gagne en cas de conflit,
+  // même sémantique "dernier upsert gagne" que importVmhEnseigne (Auchan HM/SM).
+  const familleSegmentAAppliquer = new Map<string, { famille: string | null; segment: string | null }>()
+  for (const diff of diffs) {
+    for (const ligne of diff.lignesResolues) {
+      familleSegmentAAppliquer.set(ligne.produit_id, { famille: ligne.famille, segment: ligne.segment })
+    }
+  }
+  if (familleSegmentAAppliquer.size > 0) {
+    const { error } = await admin.from('produits').upsert(
+      [...familleSegmentAAppliquer.entries()].map(([id, fs]) => ({ id, famille: fs.famille, segment: fs.segment })),
+      { onConflict: 'id' }
+    )
+    if (error) throw error
+  }
+
   const { error: histError } = await admin.from('imports_plan_de_vente').insert({
     resume: Object.fromEntries(diffs.map(d => [d.resume.enseigne, d.resume])),
   })

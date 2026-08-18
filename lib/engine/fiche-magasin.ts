@@ -2,10 +2,24 @@ import { createServerClient } from '@/lib/supabase/server'
 import { produitATravailler, type ProduitATravailler } from './produit-a-travailler'
 import { prioritesSemaine, resoudreCanonique } from './priorites'
 import type { CritereSimilarite } from './similarity'
-import type { Produit, Promo, RaisonAbsence, StatutProduit, Typologie, VmhEnseigne, VmhNational } from '@/lib/types'
+import type { Produit, ProduitEnseigne, Promo, RaisonAbsence, StatutProduit, StatutProduitMagasin, Typologie, VmhEnseigne, VmhNational } from '@/lib/types'
 
 export function comparerProduitsATravailler(a: ProduitATravailler, b: ProduitATravailler): number {
   return b.score - a.score
+}
+
+// Un produit "manquant à travailler" doit aussi être dans l'assortiment actif
+// de l'enseigne du magasin — sinon un statut orphelin (produit retiré du plan
+// de vente depuis) fait apparaître une carte non éditable pour un produit qui
+// ne devrait plus être suivi du tout.
+export function estProduitManquantATravailler(
+  produitId: string,
+  statutParProduit: Map<string, StatutProduitMagasin>,
+  produitEnseigneParProduit: Map<string, ProduitEnseigne>
+): boolean {
+  if (!produitEnseigneParProduit.has(produitId)) return false
+  const s = statutParProduit.get(produitId)?.statut
+  return s === 'manquant' || s === 'rupture'
 }
 
 export async function chargerProduitsATravailler(
@@ -27,10 +41,7 @@ export async function chargerProduitsATravailler(
   const prioriteParProduit = new Map((priorites ?? []).map(p => [p.produit_id, p]))
   const produitEnseigneParProduit = new Map((produitsEnseigne ?? []).map(pe => [pe.produit_id, pe]))
   const statutParProduit = new Map((statuts ?? []).map(s => [resoudreCanonique(s.produit_id, produitsParId), s]))
-  const manquants = (produits ?? []).filter(p => {
-    const s = statutParProduit.get(p.id)?.statut
-    return s === 'manquant' || s === 'rupture'
-  })
+  const manquants = (produits ?? []).filter(p => estProduitManquantATravailler(p.id, statutParProduit, produitEnseigneParProduit))
   if (manquants.length === 0) return []
 
   // Comparaison "magasins comparables" limitée au secteur du magasin consulté
