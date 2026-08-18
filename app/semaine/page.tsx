@@ -25,7 +25,7 @@ export default async function SemainePage({ searchParams }: { searchParams: Prom
   const [{ data: magasins }, { data: produits }, { data: produitsEnseigne }, promoLiens, { data: visites }] = await Promise.all([
     supabase.from('magasins').select('*'),
     supabase.from('produits').select('*'),
-    supabase.from('produits_enseigne').select('*'),
+    supabase.from('produits_enseigne').select('*').eq('actif', true),
     chargerTousLesPromoLiens(supabase),
     supabase.from('visites').select('*').eq('semaine', semaine).eq('commercial_id', profile.id),
   ])

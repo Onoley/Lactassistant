@@ -20,7 +20,7 @@ export async function chargerProduitsATravailler(
     supabase.from('produits').select('*'),
     supabase.from('statuts_produit_magasin').select('*').eq('magasin_id', magasinId),
     supabase.from('priorites_produits').select('*'),
-    supabase.from('produits_enseigne').select('*').eq('enseigne', magasin.enseigne),
+    supabase.from('produits_enseigne').select('*').eq('enseigne', magasin.enseigne).eq('actif', true),
   ])
 
   const produitsParId = new Map((produits ?? []).map(p => [p.id, p as Produit]))

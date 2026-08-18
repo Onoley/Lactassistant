@@ -22,12 +22,14 @@ export default async function FicheMagasinPage({ params }: { params: Promise<{ i
     supabase.from('produits').select('*').order('nom'),
     supabase.from('statuts_produit_magasin').select('*').eq('magasin_id', magasin.id),
     supabase.from('pdl_magasin').select('*').eq('magasin_id', magasin.id).maybeSingle(),
-    supabase.from('produits_enseigne').select('*').eq('enseigne', magasin.enseigne),
+    supabase.from('produits_enseigne').select('*').eq('enseigne', magasin.enseigne).eq('actif', true),
     supabase.from('promo_produits').select('produit_id, promos!inner(*)').eq('promos.enseigne', magasin.enseigne),
   ])
 
   const statutParProduit = new Map((statuts ?? []).map(s => [s.produit_id, s.statut as StatutProduit]))
   const produitsParId = new Map<string, Produit>((produits ?? []).map(p => [p.id, p]))
+  const typologieParProduit = new Map((produitsEnseigne ?? []).map(pe => [pe.produit_id, pe.typologie]))
+  const produitsAssortiment = (produits ?? []).filter(p => typologieParProduit.has(p.id))
   const promosParProduitId = new Map<string, Promo[]>()
   for (const lien of promoLiens ?? []) {
     const liste = promosParProduitId.get(lien.produit_id) ?? []
@@ -75,7 +77,12 @@ export default async function FicheMagasinPage({ params }: { params: Promise<{ i
 
       <div>
         <h2 className="font-semibold mb-2">Assortiment</h2>
-        <AssortimentTable magasinId={magasin.id} produits={produits ?? []} statutParProduit={statutParProduit} />
+        <AssortimentTable
+          magasinId={magasin.id}
+          produits={produitsAssortiment}
+          statutParProduit={statutParProduit}
+          typologieParProduit={typologieParProduit}
+        />
       </div>
     </div>
   )

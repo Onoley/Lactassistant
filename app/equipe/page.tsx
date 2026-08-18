@@ -12,7 +12,7 @@ export default async function EquipePage() {
   const [{ data: magasins }, { data: produits }, { data: produitsEnseigne }, promoLiens, { data: commerciaux }] = await Promise.all([
     supabase.from('magasins').select('*'),
     supabase.from('produits').select('*'),
-    supabase.from('produits_enseigne').select('*'),
+    supabase.from('produits_enseigne').select('*').eq('actif', true),
     chargerTousLesPromoLiens(supabase),
     supabase.from('profiles').select('*').eq('manager_id', profile.id),
   ])
