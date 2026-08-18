@@ -5,9 +5,7 @@ import type { CritereSimilarite } from './similarity'
 import type { Produit, Promo, RaisonAbsence, StatutProduit, Typologie, VmhEnseigne, VmhNational } from '@/lib/types'
 
 export function comparerProduitsATravailler(a: ProduitATravailler, b: ProduitATravailler): number {
-  const aObligatoire = a.typologie === 'obligatoire' ? 1 : 0
-  const bObligatoire = b.typologie === 'obligatoire' ? 1 : 0
-  return aObligatoire !== bObligatoire ? bObligatoire - aObligatoire : b.score - a.score
+  return b.score - a.score
 }
 
 export async function chargerProduitsATravailler(

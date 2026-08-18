@@ -31,9 +31,6 @@ export function ProduitATravaillerCarte({ magasinId, item }: { magasinId: string
           <span className="font-medium">{nomComplet(item.produit)}</span>
           <span className="text-xs text-gray-500 ml-2">{item.produit.code}</span>
           {item.rang && <span className="text-xs text-gray-500 ml-2">Top {item.rang}</span>}
-          {item.typologie === 'obligatoire' && (
-            <span className="text-xs bg-red-600 text-white rounded px-1.5 py-0.5 ml-2">Obligatoire</span>
-          )}
         </div>
         {item.momentum && (
           <span className={`text-xs rounded border px-2 py-0.5 ${COULEUR_NIVEAU[item.momentum]}`}>{LIBELLE_NIVEAU[item.momentum]}</span>
