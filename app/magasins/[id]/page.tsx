@@ -18,15 +18,17 @@ export default async function FicheMagasinPage({ params }: { params: Promise<{ i
   const { data: magasin } = await supabase.from('magasins').select('*').eq('id', id).single()
   if (!magasin) notFound()
 
-  const [{ data: produits }, { data: statuts }, { data: pdl }, { data: produitsEnseigne }, { data: promoLiens }] = await Promise.all([
+  const [{ data: produits }, { data: statuts }, { data: pdl }, { data: produitsEnseigne }, { data: promoLiens }, { data: prioritesProduits }] = await Promise.all([
     supabase.from('produits').select('*').order('nom'),
     supabase.from('statuts_produit_magasin').select('*').eq('magasin_id', magasin.id),
     supabase.from('pdl_magasin').select('*').eq('magasin_id', magasin.id).maybeSingle(),
     supabase.from('produits_enseigne').select('*').eq('enseigne', magasin.enseigne).eq('actif', true),
     supabase.from('promo_produits').select('produit_id, promos!inner(*)').eq('promos.enseigne', magasin.enseigne),
+    supabase.from('priorites_produits').select('*'),
   ])
 
   const statutParProduit = new Map((statuts ?? []).map(s => [s.produit_id, s.statut as StatutProduit]))
+  const rangParProduit = new Map((prioritesProduits ?? []).map(p => [p.produit_id, p.rang as 20 | 50 | 70]))
   const produitsParId = new Map<string, Produit>((produits ?? []).map(p => [p.id, p]))
   const typologieParProduit = new Map((produitsEnseigne ?? []).map(pe => [pe.produit_id, pe.typologie]))
   const produitsAssortiment = (produits ?? []).filter(p => typologieParProduit.has(p.id))
@@ -82,6 +84,7 @@ export default async function FicheMagasinPage({ params }: { params: Promise<{ i
           produits={produitsAssortiment}
           statutParProduit={statutParProduit}
           typologieParProduit={typologieParProduit}
+          rangParProduit={rangParProduit}
         />
       </div>
     </div>

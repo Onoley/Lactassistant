@@ -39,11 +39,13 @@ export function AssortimentTable({
   produits,
   statutParProduit,
   typologieParProduit,
+  rangParProduit,
 }: {
   magasinId: string
   produits: Produit[]
   statutParProduit: Map<string, StatutProduit>
   typologieParProduit: Map<string, Typologie | null>
+  rangParProduit: Map<string, 20 | 50 | 70>
 }) {
   const [recherche, setRecherche] = useState('')
 
@@ -86,7 +88,10 @@ export function AssortimentTable({
                       {segments.get(segment)!.map(p => (
                         <tr key={p.id}>
                           <td>
-                            <div>{nomComplet(p)}</div>
+                            <div>
+                              {nomComplet(p)}
+                              {rangParProduit.get(p.id) && <span className="text-xs text-gray-500 ml-2">Top {rangParProduit.get(p.id)}</span>}
+                            </div>
                             <div className="text-xs text-gray-500">EAN {p.code}</div>
                           </td>
                           <td>{typologieParProduit.get(p.id) ?? '—'}</td>
