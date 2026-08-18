@@ -7,7 +7,7 @@ function magasin(id: string, overrides: Partial<Magasin> = {}): Magasin {
   return { id, code: id, nom: id, enseigne: 'Carrefour', taille: 'super', adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null, surface: null, ...overrides }
 }
 
-const produit: Produit = { id: 'p1', code: 'P1', nom: 'Yaourt nature', categorie: null }
+const produit: Produit = { id: 'p1', code: 'P1', nom: 'Yaourt nature', categorie: null, produit_canonique_id: null, famille: null, segment: null, statut_catalogue: 'permanent', type_liaison: null }
 
 describe('importanceProduitFiche', () => {
   it('signale les magasins similaires qui ont le produit', () => {

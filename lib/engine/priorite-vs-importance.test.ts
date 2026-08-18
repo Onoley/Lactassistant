@@ -13,7 +13,7 @@ describe('séparation priorité hebdomadaire vs importance fiche magasin', () =>
     const comparable1 = magasin('2')
     const comparable2 = magasin('3')
     const tousLesMagasins = [cible, comparable1, comparable2]
-    const produit: Produit = { id: 'p1', code: 'P1', nom: 'Yaourt Top20', categorie: null }
+    const produit: Produit = { id: 'p1', code: 'P1', nom: 'Yaourt Top20', categorie: null, produit_canonique_id: null, famille: null, segment: null, statut_catalogue: 'permanent', type_liaison: null }
     const produitsParId = new Map([['p1', produit]])
 
     const statuts: StatutProduitMagasin[] = [

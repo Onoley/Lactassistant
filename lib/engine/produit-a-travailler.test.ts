@@ -6,7 +6,7 @@ function magasin(overrides: Partial<Magasin> = {}): Magasin {
   return { id: '1', code: '1', nom: 'Magasin Test', enseigne: 'Carrefour', taille: 'hyper', adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null, surface: null, ...overrides }
 }
 
-const produit: Produit = { id: 'p1', code: 'P1', nom: 'Yaourt Nature', categorie: null }
+const produit: Produit = { id: 'p1', code: 'P1', nom: 'Yaourt Nature', categorie: null, produit_canonique_id: null, famille: null, segment: null, statut_catalogue: 'permanent', type_liaison: null }
 
 describe('produitATravailler', () => {
   it("n'affiche jamais d'action de commande pour un produit non commandable, meme obligatoire", () => {

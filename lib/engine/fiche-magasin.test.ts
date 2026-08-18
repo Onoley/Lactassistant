@@ -4,7 +4,7 @@ import type { ProduitATravailler } from './produit-a-travailler'
 import type { Produit } from '@/lib/types'
 
 function item(overrides: Partial<ProduitATravailler> = {}): ProduitATravailler {
-  const produit: Produit = { id: 'p1', code: 'P1', nom: 'Test', categorie: null }
+  const produit: Produit = { id: 'p1', code: 'P1', nom: 'Test', categorie: null, produit_canonique_id: null, famille: null, segment: null, statut_catalogue: 'permanent', type_liaison: null }
   return {
     produit,
     rang: null,

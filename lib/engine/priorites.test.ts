@@ -6,8 +6,8 @@ function magasin(id: string, overrides: Partial<Magasin> = {}): Magasin {
   return { id, code: id, nom: `Magasin ${id}`, enseigne: 'Carrefour', taille: 'super', adresse: null, secteur_id: 's', contact_nom: null, contact_telephone: null, contact_email: null, surface: null, ...overrides }
 }
 
-const yaourt: Produit = { id: 'p1', code: 'P1', nom: 'Yaourt', categorie: null }
-const fromage: Produit = { id: 'p2', code: 'P2', nom: 'Fromage', categorie: null }
+const yaourt: Produit = { id: 'p1', code: 'P1', nom: 'Yaourt', categorie: null, produit_canonique_id: null, famille: null, segment: null, statut_catalogue: 'permanent', type_liaison: null }
+const fromage: Produit = { id: 'p2', code: 'P2', nom: 'Fromage', categorie: null, produit_canonique_id: null, famille: null, segment: null, statut_catalogue: 'permanent', type_liaison: null }
 const produitsParId = new Map<string, Produit>([['p1', yaourt], ['p2', fromage]])
 
 function promo(overrides: Partial<Promo> = {}): Promo {
@@ -115,7 +115,7 @@ describe('prioritesSemaine', () => {
       { magasin_id: '1', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '', raison_absence: null },
     ]
     const produitsEnseigne: ProduitEnseigne[] = [
-      { produit_id: 'p1', enseigne: 'Carrefour', typologie: null, statut_disponibilite: 'arret_industriel' },
+      { produit_id: 'p1', enseigne: 'Carrefour', typologie: null, statut_disponibilite: 'arret_industriel', actif: true },
     ]
     const result = prioritesSemaine([mag], statuts, produitsParId, produitsEnseigne, new Map(), new Date('2026-08-17'))
     expect(result).toHaveLength(1)
@@ -145,8 +145,8 @@ describe('prioritesSemaine', () => {
       { magasin_id: '2', produit_id: 'p1', statut: 'rupture', signale_par: null, signale_at: '', raison_absence: null },
     ]
     const produitsEnseigne: ProduitEnseigne[] = [
-      { produit_id: 'p1', enseigne: 'Carrefour', typologie: null, statut_disponibilite: 'non_commandable' },
-      { produit_id: 'p1', enseigne: 'Leclerc', typologie: null, statut_disponibilite: 'commandable' },
+      { produit_id: 'p1', enseigne: 'Carrefour', typologie: null, statut_disponibilite: 'non_commandable', actif: true },
+      { produit_id: 'p1', enseigne: 'Leclerc', typologie: null, statut_disponibilite: 'commandable', actif: true },
     ]
     const result = prioritesSemaine([magCarrefour, magLeclerc], statuts, produitsParId, produitsEnseigne, new Map(), new Date('2026-08-17'))
     expect(result).toHaveLength(2)

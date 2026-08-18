@@ -11,7 +11,7 @@ function magasin(id: string): Magasin {
 }
 
 function produit(id: string): Produit {
-  return { id, code: id, nom: `Produit ${id}`, categorie: null }
+  return { id, code: id, nom: `Produit ${id}`, categorie: null, produit_canonique_id: null, famille: null, segment: null, statut_catalogue: 'permanent', type_liaison: null }
 }
 
 function promo(id: string): Promo {
