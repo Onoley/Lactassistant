@@ -1,7 +1,7 @@
 'use client'
 import { useState, useTransition } from 'react'
 import { definirAssortiment, definirPriorite, definirStatutDisponibilite, definirTypologie, supprimerProduit } from '@/lib/produits/actions'
-import { ENSEIGNES, type Produit, type StatutDisponibilite, type Typologie } from '@/lib/types'
+import { ENSEIGNES, type Produit, type StatutDisponibilite } from '@/lib/types'
 import { nomComplet } from '@/lib/engine/nom-complet'
 
 const LIBELLES_STATUT: Record<StatutDisponibilite, string> = {
@@ -9,11 +9,6 @@ const LIBELLES_STATUT: Record<StatutDisponibilite, string> = {
   non_commandable: 'Non commandable (déréférencé)',
   arret_industriel: 'Arrêt industriel',
   en_attente_referencement: 'En attente de référencement',
-}
-
-const LIBELLES_TYPOLOGIE: Record<Typologie, string> = {
-  obligatoire: 'Obligatoire',
-  picking: 'Picking',
 }
 
 export function ProduitRow({
@@ -57,7 +52,7 @@ export function ProduitRow({
     startTransition(() => { definirStatutDisponibilite(produit.id, enseigne, statut) })
   }
 
-  function handleTypologieChange(enseigne: string, typologie: Typologie | null) {
+  function handleTypologieChange(enseigne: string, typologie: string | null) {
     const next = new Map(typologies)
     next.set(enseigne, typologie)
     setTypologies(next)
@@ -96,23 +91,13 @@ export function ProduitRow({
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
-              <select
+              <input
+                type="text"
                 value={typologies.get(e) ?? ''}
-                onChange={ev => handleTypologieChange(e, ev.target.value === '' ? null : (ev.target.value as Typologie))}
-                className="block text-[10px] border rounded mt-1"
-              >
-                <option value="">Typologie...</option>
-                {Object.entries(LIBELLES_TYPOLOGIE).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-                {(() => {
-                  const valeurActuelle = typologies.get(e)
-                  if (valeurActuelle && valeurActuelle !== 'obligatoire' && valeurActuelle !== 'picking') {
-                    return <option value={valeurActuelle}>Valeur héritée : {valeurActuelle}</option>
-                  }
-                  return null
-                })()}
-              </select>
+                onChange={ev => handleTypologieChange(e, ev.target.value || null)}
+                placeholder="T1, H2, MN..."
+                className="block text-[10px] border rounded mt-1 w-16"
+              />
             </>
           )}
         </td>

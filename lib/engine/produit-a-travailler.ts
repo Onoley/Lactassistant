@@ -75,7 +75,6 @@ function messagePromo(promo: Promo): string {
 }
 
 function construireArgumentaire(
-  typologie: Typologie | null,
   magasin: Magasin,
   presentsChezComparables: { total: number; presents: number },
   promoInfo: ReturnType<typeof promoPrincipale>,
@@ -90,9 +89,6 @@ function construireArgumentaire(
   }
 
   const phrases: string[] = []
-  if (typologie === 'obligatoire') {
-    phrases.push(`Référencement obligatoire chez ${magasin.enseigne} — son absence est un écart à signaler en priorité.`)
-  }
   if (presentsChezComparables.presents > 0) {
     phrases.push(`Présent dans ${presentsChezComparables.presents} magasin(s) similaire(s) sur ${presentsChezComparables.total}.`)
   }
@@ -143,7 +139,7 @@ export function produitATravailler(
 
   const vmh = vmhPertinent(magasin, vmhNational, vmhEnseigne)
   const action = actionRecommandee(statutDisponibilite, promoInfo?.stade ?? null, statutProduitMagasin)
-  const argumentaire = construireArgumentaire(typologie, magasin, importance?.presentsChezComparables ?? { total: 0, presents: 0 }, promoInfo, vmh, raisonAbsence, action, statutDisponibilite)
+  const argumentaire = construireArgumentaire(magasin, importance?.presentsChezComparables ?? { total: 0, presents: 0 }, promoInfo, vmh, raisonAbsence, action, statutDisponibilite)
 
   return {
     produit,

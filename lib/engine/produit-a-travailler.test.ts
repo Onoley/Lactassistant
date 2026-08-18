@@ -19,22 +19,6 @@ describe('produitATravailler', () => {
     expect(result.argumentaire).not.toContain('obligatoire')
   })
 
-  it("ouvre l'argumentaire par le rappel de conformité pour un produit obligatoire commandable", () => {
-    const result = produitATravailler(
-      magasin(), produit, 20, 'obligatoire', 'manquant', null, 'commandable',
-      [], new Map(), [], null, null, 'les_deux', null
-    )
-    expect(result.argumentaire).toContain('Référencement obligatoire chez Carrefour')
-  })
-
-  it("n'ouvre pas par le rappel de conformité pour un produit picking", () => {
-    const result = produitATravailler(
-      magasin(), produit, 20, 'picking', 'manquant', null, 'commandable',
-      [], new Map(), [], null, null, 'les_deux', null
-    )
-    expect(result.argumentaire).not.toContain('obligatoire')
-  })
-
   it('intègre le VMH national quand disponible, scopé au format hyper', () => {
     const vmh: VmhNational = { produit_id: 'p1', vmh_hyper: 9.2, vmh_super: 3.6, dv_hmsm: 41.5, dv_hyper: 59.7, dv_super: 21.3, prix_moyen: 1.6, periode_reference: null, updated_at: '' }
     const result = produitATravailler(
