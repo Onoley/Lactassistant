@@ -134,3 +134,76 @@ export interface VmhEnseigne {
   periode_reference: string | null
   updated_at: string
 }
+
+import type { RaisonsActuelles } from './engine/raison'
+
+export type TypeMission =
+  | 'anticiper_promo' | 'revendre_promo' | 'constater_promo'
+  | 'referencer_produit' | 'corriger_rupture' | 'securiser_commande'
+  | 'suivre_engagement' | 'optimiser_implantation' | 'proposer_test_ht' | 'verifier_information'
+
+export const TYPES_MISSION_PROMO: readonly TypeMission[] = ['anticiper_promo', 'revendre_promo', 'constater_promo']
+
+export type StatutOpportunite =
+  | 'detectee' | 'a_preparer' | 'presentee' | 'accord_obtenu' | 'en_attente'
+  | 'refusee' | 'commandee' | 'mise_en_place' | 'a_constater' | 'reussie' | 'abandonnee'
+
+export type NiveauPrioriteOpportunite = 'P1' | 'P2' | 'P3'
+export type Confiance = 'donnees_confirmees' | 'recommandation_probable' | 'information_a_verifier'
+
+export interface Opportunite {
+  id: string
+  magasin_id: string
+  produit_canonique_id: string
+  type_mission: TypeMission
+  promo_id: string | null
+  statut: StatutOpportunite
+  niveau_priorite: NiveauPrioriteOpportunite | null
+  score: number | null
+  confiance: Confiance | null
+  raisons_actuelles: RaisonsActuelles | null
+  score_calcule_at: string | null
+  fingerprint: string | null
+  version_moteur: string | null
+  cycle: number
+  derniere_reouverture_at: string | null
+  cree_at: string
+  cloture_at: string | null
+  prochaine_action_at: string | null
+}
+
+export type TypeEvenementOpportunite =
+  | 'creation' | 'recalcul_score' | 'changement_statut' | 'preuve_ajoutee'
+  | 'preuve_retiree' | 'reouverture' | 'presentee' | 'decision' | 'commentaire' | 'cloture'
+
+export interface OpportuniteEvenement {
+  id: string
+  opportunite_id: string
+  type: TypeEvenementOpportunite
+  visite_id: string | null
+  score_a_ce_moment: number | null
+  raisons: RaisonsActuelles | null
+  statut_avant: string | null
+  statut_apres: string | null
+  raison_refus: string | null
+  commentaire: string | null
+  cree_par: string | null
+  cree_at: string
+}
+
+export interface OpportunitePromoPreuve {
+  opportunite_id: string
+  promo_id: string
+  ajoute_at: string
+}
+
+export interface StatutProduitMagasinHistorique {
+  id: string
+  magasin_id: string
+  produit_id: string
+  statut: StatutProduit
+  raison_absence: RaisonAbsence | null
+  visite_id: string | null
+  signale_par: string | null
+  signale_at: string
+}
