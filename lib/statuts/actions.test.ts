@@ -3,11 +3,18 @@ import { describe, expect, it, vi } from 'vitest'
 
 const upsertCalls: unknown[] = []
 const insertCalls: unknown[] = []
+// Per-produit override for produit_canonique_id, keyed by produitId. Empty by
+// default so existing tests keep resolving to `null` (idEffectif === produitId).
+const canoniqueByProduit: Record<string, string | null> = {}
 
 vi.mock('@/lib/supabase/server', () => ({
   createServerClient: () => ({
     from: (table: string) => ({
-      select: () => ({ eq: () => ({ single: async () => ({ data: { produit_canonique_id: null } }) }) }),
+      select: () => ({
+        eq: (_col: string, id: string) => ({
+          single: async () => ({ data: { produit_canonique_id: canoniqueByProduit[id] ?? null } }),
+        }),
+      }),
       upsert: (payload: unknown, opts: unknown) => {
         upsertCalls.push({ table, payload, opts })
         return Promise.resolve({ error: null })
@@ -38,5 +45,18 @@ describe('updateStatutProduit — historique', () => {
     await updateStatutProduit('m1', 'p1', 'rupture')
     const historiqueCall = insertCalls.find(c => (c as { table: string }).table === 'statuts_produit_magasin_historique')
     expect(historiqueCall).toBeDefined()
+  })
+
+  it('résout le produit canonique avant d\'écrire dans l\'historique', async () => {
+    upsertCalls.length = 0
+    canoniqueByProduit.p1 = 'canon-1'
+    try {
+      await updateStatutProduit('m1', 'p1', 'rupture', 'v1')
+      const historiqueCall = upsertCalls.find(c => (c as { table: string }).table === 'statuts_produit_magasin_historique')
+      expect(historiqueCall).toBeDefined()
+      expect((historiqueCall as { payload: { produit_id: string } }).payload.produit_id).toBe('canon-1')
+    } finally {
+      delete canoniqueByProduit.p1
+    }
   })
 })
