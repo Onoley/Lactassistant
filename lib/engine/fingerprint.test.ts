@@ -4,7 +4,10 @@ import type { RaisonsActuelles } from './raison'
 
 const raisons: RaisonsActuelles = {
   version: 1,
-  raisons: [{ version: 1, codeSignal: 'promo_a_constater', source: { type: 'promo', id: 'p1' }, observedAt: '2026-08-19', fraicheur: 'fraiche', contributionScore: 40, niveauDeclenche: 'P1', texteCommercial: 'x' }],
+  raisons: [
+    { version: 1, codeSignal: 'promo_a_constater', source: { type: 'promo', id: 'p1' }, observedAt: '2026-08-19', fraicheur: 'fraiche', contributionScore: 40, niveauDeclenche: 'P1', texteCommercial: 'x' },
+    { version: 1, codeSignal: 'promo_a_revendre', source: { type: 'promo', id: 'p2' }, observedAt: '2026-08-19', fraicheur: 'fraiche', contributionScore: 30, niveauDeclenche: 'P2', texteCommercial: 'y' },
+  ],
 }
 
 describe('calculerFingerprint', () => {
