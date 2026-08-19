@@ -4,7 +4,7 @@
 
 **Goal:** Livrer le modèle de données des opportunités commerciales et le pipeline pur qui les détecte, les classe (P1/P2/P3), les score, leur attribue un niveau de confiance, et les persiste de façon transactionnelle et idempotente — puis intégrer ce moteur en shadow mode (calcule et enregistre, sans remplacer les écrans actuels).
 
-**Architecture:** Quatre nouvelles tables Postgres (`opportunites`, `opportunite_evenements`, `opportunite_promos_preuves`, `statuts_produit_magasin_historique`) plus une fonction Postgres transactionnelle (`rattacher_opportunite`) pour toute écriture. Le pipeline lui-même est une suite de fonctions TypeScript pures (exclusion → détection → classification → score → confiance → fingerprint) orchestrées par une seule fonction (`rattacherOpportunite`) qui appelle la fonction Postgres via RPC. Le moteur est câblé aux Server Actions existantes qui modifient statuts/promos/assortiment, plus un point d'entrée HTTP pour le recalcul planifié.
+**Architecture:** Quatre nouvelles tables Postgres (`opportunites`, `opportunite_evenements`, `opportunite_promos_preuves`, `statuts_produit_magasin_historique`) plus une fonction Postgres transactionnelle (`rattacher_opportunite`) pour toute écriture. Le pipeline lui-même est une suite de fonctions TypeScript pures (exclusion → détection → classification → score → confiance → fingerprint) orchestrées par une seule fonction (`rattacherOpportunites`) qui groupe les signaux par mission distincte et appelle la fonction Postgres via RPC une fois par groupe. Le moteur est câblé aux Server Actions existantes qui modifient statuts/promos/assortiment, plus un point d'entrée HTTP pour le recalcul planifié.
 
 **Tech Stack:** Next.js 16 (Server Actions + Route Handlers), Supabase Postgres (RLS, fonctions `plpgsql`, RPC), TypeScript, Zod (nouvelle dépendance), Vitest.
 
@@ -1673,7 +1673,9 @@ git commit -m "feat: fonction Postgres transactionnelle rattacher_opportunite"
 
 ---
 
-### Task 14: Orchestrateur TypeScript `rattacherOpportunite`
+### Task 14: Orchestrateur TypeScript `rattacherOpportunites`
+
+**Révision de conception (voir ledger SDD, Task 11) :** une seule exécution de `detecterSignaux` (Task 8) peut légitimement produire des signaux pour **plusieurs missions distinctes** sur le même produit — par exemple une rupture récurrente Top 20, une promo à revendre sur une campagne complètement différente, et un engagement échu, tous réels, tous indépendants, tous produits par les détecteurs du Task 8 en un seul appel. La version initialement prévue de cet orchestrateur ne retenait qu'un seul « signal principal » (le plus fort) et rattachait une seule opportunité — ce qui aurait silencieusement perdu toutes les autres missions légitimes. Cette version groupe les signaux par identité `(typeMission, promoId)` et rattache **une opportunité par groupe**.
 
 **Files:**
 - Create: `lib/engine/rattachement.ts`
@@ -1681,17 +1683,17 @@ git commit -m "feat: fonction Postgres transactionnelle rattacher_opportunite"
 
 **Interfaces:**
 - Consumes: `typesExclus` (Task 7), `detecterSignaux` (Task 8), `classifierNiveau` (Task 9), `calculerScoreOpportunite` (Task 10), `determinerConfiance` (Task 11), `calculerFingerprint` (Task 12), RPC `rattacher_opportunite` (Task 13).
-- Produces: `estDeclencheurReel(signaux, opportuniteExistante): boolean`, `rattacherOpportunite(admin, ctx, config, visiteId?): Promise<{ opportunite: Opportunite; opportuniteVerification: Opportunite | null } | null>` — consommé par le câblage des déclencheurs (Task 15) et le recalcul planifié (Task 16).
+- Produces: `estDeclencheurReel(signaux, opportuniteExistante): boolean`, `rattacherOpportunites(admin, ctx, config, visiteId?): Promise<ResultatRattachement[]>` — consommé par le câblage des déclencheurs (Task 15) et le recalcul planifié (Task 16). Ni Task 15 ni Task 16 n'inspectent la valeur de retour (appel pour effet de bord) — le tableau existe pour la testabilité et un futur consommateur, pas parce qu'un appelant actuel en a besoin.
 
-- [ ] **Step 1: Écrire le test de `estDeclencheurReel`**
+- [ ] **Step 1: Écrire le test de `estDeclencheurReel` et `rattacherOpportunites`**
 
 ```ts
 // lib/engine/rattachement.test.ts
 import { describe, expect, it, vi } from 'vitest'
-import { estDeclencheurReel, rattacherOpportunite } from './rattachement'
+import { estDeclencheurReel, rattacherOpportunites } from './rattachement'
 import { CONFIG_MOTEUR_DEFAUT } from './config-moteur'
 import type { SignalDetecte } from './signal'
-import type { Opportunite, Magasin, Produit } from '@/lib/types'
+import type { Opportunite, Magasin, Produit, Promo } from '@/lib/types'
 
 function signal(overrides: Partial<SignalDetecte>): SignalDetecte {
   return {
@@ -1699,6 +1701,17 @@ function signal(overrides: Partial<SignalDetecte>): SignalDetecte {
     codeSignal: 'x', sourceType: 'vmh', sourceId: 's1',
     observedAt: '2026-08-19T00:00:00.000Z', expiresAt: null, force: 10,
     donneesArgumentaire: {}, ...overrides,
+  }
+}
+
+const magasin: Magasin = { id: 'm1', code: 'M1', nom: 'T', enseigne: 'Carrefour', taille: 'hyper', adresse: null, secteur_id: 's1', contact_nom: null, contact_telephone: null, contact_email: null, surface: null }
+const produit: Produit = { id: 'p1', code: 'E1', nom: 'P', categorie: null, produit_canonique_id: null, famille: null, segment: null, statut_catalogue: 'permanent', type_liaison: null }
+
+function ctxVide(overrides: Record<string, unknown> = {}) {
+  return {
+    magasin, produit, statutProduitMagasin: 'manquant', promosApplicables: [], opportunitesExistantes: [],
+    rangTop: null, historiqueRuptures: [], aujourdHui: new Date('2026-08-19'),
+    statutDisponibilite: 'commandable', ...overrides,
   }
 }
 
@@ -1724,21 +1737,37 @@ describe('estDeclencheurReel', () => {
   })
 })
 
-describe('rattacherOpportunite', () => {
-  it('appelle le RPC avec les champs calculés et retourne le résultat', async () => {
-    const rpc = vi.fn().mockResolvedValue({ data: { id: 'o1', statut: 'detectee' }, error: null })
-    const admin = { rpc } as unknown as Parameters<typeof rattacherOpportunite>[0]
-    const magasin: Magasin = { id: 'm1', code: 'M1', nom: 'T', enseigne: 'Carrefour', taille: 'hyper', adresse: null, secteur_id: 's1', contact_nom: null, contact_telephone: null, contact_email: null, surface: null }
-    const produit: Produit = { id: 'p1', code: 'E1', nom: 'P', categorie: null, produit_canonique_id: null, famille: null, segment: null, statut_catalogue: 'permanent', type_liaison: null }
-
-    const resultat = await rattacherOpportunite(admin, {
-      magasin, produit, statutProduitMagasin: 'manquant', promosApplicables: [], opportunitesExistantes: [],
-      rangTop: null, historiqueRuptures: [], aujourdHui: new Date('2026-08-19'),
-      statutDisponibilite: 'commandable',
-    }, CONFIG_MOTEUR_DEFAUT, null)
-
-    expect(resultat).toBeNull() // aucun signal détecté sans promo ni rupture -> pas de rattachement
+describe('rattacherOpportunites', () => {
+  it('sans aucun signal détecté, ne rattache rien et n\'appelle jamais le RPC', async () => {
+    const rpc = vi.fn()
+    const admin = { rpc } as unknown as Parameters<typeof rattacherOpportunites>[0]
+    const resultats = await rattacherOpportunites(admin, ctxVide() as never, CONFIG_MOTEUR_DEFAUT, null)
+    expect(resultats).toEqual([])
     expect(rpc).not.toHaveBeenCalled()
+  })
+
+  it('deux missions distinctes sur le même produit produisent deux appels RPC séparés, pas un seul', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: { id: 'o1', statut: 'detectee' }, error: null })
+    const admin = { rpc } as unknown as Parameters<typeof rattacherOpportunites>[0]
+    // Une promo au stade "revendre" (référencer_produit ne s'applique pas ici,
+    // manquant=false) + un engagement échu sur une opportunité totalement
+    // différente : deux groupes (typeMission, promoId) distincts.
+    const promo: Promo = { id: 'promoA', code: 'PA', enseigne: 'Carrefour', mecanique: 'ODR', date_installation: '2026-08-01', date_debut_vente: '2026-09-01', date_constat: null, date_fin_vente: null, op_trade: null }
+    const oppExistante: Opportunite = {
+      id: 'o0', magasin_id: 'm1', produit_canonique_id: 'p1', type_mission: 'securiser_commande', promo_id: null,
+      statut: 'accord_obtenu', niveau_priorite: 'P1', score: 70, confiance: 'donnees_confirmees', raisons_actuelles: null,
+      score_calcule_at: null, fingerprint: null, version_moteur: null, cycle: 1, derniere_reouverture_at: null,
+      cree_at: '2026-08-01', cloture_at: null, prochaine_action_at: '2026-08-15',
+    }
+
+    const resultats = await rattacherOpportunites(admin, ctxVide({
+      statutProduitMagasin: 'present', promosApplicables: [promo], opportunitesExistantes: [oppExistante],
+    }) as never, CONFIG_MOTEUR_DEFAUT, null)
+
+    expect(resultats.length).toBe(2)
+    expect(rpc).toHaveBeenCalledTimes(2)
+    const typesAppeles = rpc.mock.calls.map(c => (c[1] as { p_type_mission: string }).p_type_mission).sort()
+    expect(typesAppeles).toEqual(['revendre_promo', 'suivre_engagement'])
   })
 })
 ```
@@ -1763,13 +1792,14 @@ import { calculerFingerprint } from './fingerprint'
 import { RaisonsActuellesSchema, type RaisonsActuelles } from './raison'
 import { stadePromo } from './stade-promo'
 import type { ConfigMoteur } from './config-moteur'
+import type { SignalDetecte, SourceSignal } from './signal'
 
 // Sources qui, seules, ne justifient jamais une réouverture après refus
 // (spec §5) — un changement de score/VMH/comparables/Top n'est jamais un
 // déclencheur réel à lui seul.
-const SOURCES_JAMAIS_SEULES_DECLENCHEUR: Array<import('./signal').SourceSignal> = ['vmh', 'comparable', 'top']
+const SOURCES_JAMAIS_SEULES_DECLENCHEUR: SourceSignal[] = ['vmh', 'comparable', 'top']
 
-export function estDeclencheurReel(signaux: import('./signal').SignalDetecte[], opportuniteExistante: Opportunite | null): boolean {
+export function estDeclencheurReel(signaux: SignalDetecte[], opportuniteExistante: Opportunite | null): boolean {
   if (!opportuniteExistante) return true
   return signaux.some(s => !SOURCES_JAMAIS_SEULES_DECLENCHEUR.includes(s.sourceType))
 }
@@ -1781,50 +1811,43 @@ export interface ResultatRattachement {
   opportuniteVerification: Opportunite | null
 }
 
-export async function rattacherOpportunite(
+function cleGroupe(typeMission: string, promoId: string | null): string {
+  return `${typeMission}:${promoId ?? ''}`
+}
+
+async function rattacherUnGroupe(
   admin: SupabaseClient,
   ctx: ContexteRattachement,
+  groupeSignaux: SignalDetecte[],
   config: ConfigMoteur,
-  visiteId: string | null = null
-): Promise<ResultatRattachement | null> {
-  const signaux = detecterSignaux(ctx, config)
-  if (signaux.length === 0) return null
+  visiteId: string | null
+): Promise<ResultatRattachement> {
+  const identite = groupeSignaux[0]
 
-  const promoPrincipale = ctx.promosApplicables[0]
-  const exclus = typesExclus({
-    statutDisponibilite: ctx.statutDisponibilite,
-    statutCatalogue: ctx.produit.statut_catalogue,
-    statutProduitMagasin: ctx.statutProduitMagasin,
-    promoStade: promoPrincipale ? stadePromo(promoPrincipale, ctx.aujourdHui) : null,
-    constaterDejaActionne: ctx.opportunitesExistantes.some(o => o.type_mission === 'constater_promo' && o.statut === 'reussie'),
-  })
-
-  const signauxRetenus = signaux.filter(s => !exclus.has(s.typeMission))
-  if (signauxRetenus.length === 0) return null
-
-  const signalPrincipal = signauxRetenus.reduce((a, b) => (b.force > a.force ? b : a))
+  // Preuves complémentaires : toute autre promo applicable à ce produit,
+  // hormis celle qui porte l'identité de ce groupe (le cas échéant) — dérivé
+  // directement du contexte plutôt que des signaux, pour couvrir une
+  // campagne future qui n'a encore déclenché aucun signal elle-même
+  // (validé section 1 : « campagne B citée en preuve pour la campagne A »).
   const preuvesPromoIds = [...new Set(
-    signauxRetenus
-      .filter(s => s !== signalPrincipal && s.sourceType === 'promo' && s.sourceId !== signalPrincipal.promoId)
-      .map(s => s.sourceId)
+    ctx.promosApplicables.map(p => p.id).filter(id => id !== identite.promoId)
   )]
 
-  const classification = classifierNiveau(signauxRetenus)
-  if (!classification) return null
+  const { niveau } = classifierNiveau(groupeSignaux)!
 
   const opportuniteExistante = ctx.opportunitesExistantes.find(
-    o => o.type_mission === signalPrincipal.typeMission && o.promo_id === signalPrincipal.promoId
+    o => o.type_mission === identite.typeMission && o.promo_id === identite.promoId
   ) ?? null
-  const declencheurReel = estDeclencheurReel(signauxRetenus, opportuniteExistante)
+  const declencheurReel = estDeclencheurReel(groupeSignaux, opportuniteExistante)
 
   const penalite = opportuniteExistante?.statut === 'refusee' && declencheurReel ? config.penaliteReouvertureApresRefus : 0
   const accordDejaObtenu = opportuniteExistante?.statut === 'accord_obtenu' || opportuniteExistante?.statut === 'commandee'
-  const score = calculerScoreOpportunite(signauxRetenus, { rangTop: ctx.rangTop, accordDejaObtenu }, penalite, config)
-  const { confiance, contradiction } = determinerConfiance(signauxRetenus)
+  const score = calculerScoreOpportunite(groupeSignaux, { rangTop: ctx.rangTop, accordDejaObtenu }, penalite, config)
+  const { confiance, contradiction } = determinerConfiance(groupeSignaux)
 
   const raisons: RaisonsActuelles = {
     version: 1,
-    raisons: signauxRetenus.map(s => ({
+    raisons: groupeSignaux.map(s => ({
       version: 1, codeSignal: s.codeSignal, source: { type: s.sourceType, id: s.sourceId },
       observedAt: s.observedAt, fraicheur: 'fraiche', contributionScore: s.force,
       niveauDeclenche: s.niveauDeclenche, texteCommercial: s.codeSignal,
@@ -1832,19 +1855,19 @@ export async function rattacherOpportunite(
   }
   RaisonsActuellesSchema.parse(raisons)
 
+  const confianceFinale = contradiction ? 'information_a_verifier' : confiance
   const fingerprint = calculerFingerprint({
-    niveauPriorite: classification.niveau, score, confiance: contradiction ? 'information_a_verifier' : confiance,
-    raisons, statut: opportuniteExistante?.statut ?? 'detectee',
+    niveauPriorite: niveau, score, confiance: confianceFinale, raisons, statut: opportuniteExistante?.statut ?? 'detectee',
   })
 
   const { data, error } = await admin.rpc('rattacher_opportunite', {
     p_magasin_id: ctx.magasin.id,
     p_produit_canonique_id: ctx.produit.id,
-    p_type_mission: signalPrincipal.typeMission,
-    p_promo_id: signalPrincipal.promoId,
-    p_niveau_priorite: classification.niveau,
+    p_type_mission: identite.typeMission,
+    p_promo_id: identite.promoId,
+    p_niveau_priorite: niveau,
     p_score: score,
-    p_confiance: contradiction ? 'information_a_verifier' : confiance,
+    p_confiance: confianceFinale,
     p_raisons: raisons,
     p_fingerprint: fingerprint,
     p_version_moteur: config.version,
@@ -1862,11 +1885,11 @@ export async function rattacherOpportunite(
       p_produit_canonique_id: ctx.produit.id,
       p_type_mission: 'verifier_information',
       p_promo_id: null,
-      p_niveau_priorite: classification.niveau,
+      p_niveau_priorite: niveau,
       p_score: score,
       p_confiance: 'information_a_verifier',
       p_raisons: raisonsVerif,
-      p_fingerprint: calculerFingerprint({ niveauPriorite: classification.niveau, score, confiance: 'information_a_verifier', raisons: raisonsVerif, statut: 'detectee' }),
+      p_fingerprint: calculerFingerprint({ niveauPriorite: niveau, score, confiance: 'information_a_verifier', raisons: raisonsVerif, statut: 'detectee' }),
       p_version_moteur: config.version,
       p_declencheur_reel: true,
       p_preuves_promo_ids: [],
@@ -1878,12 +1901,48 @@ export async function rattacherOpportunite(
 
   return { opportunite: data as Opportunite, opportuniteVerification }
 }
+
+export async function rattacherOpportunites(
+  admin: SupabaseClient,
+  ctx: ContexteRattachement,
+  config: ConfigMoteur,
+  visiteId: string | null = null
+): Promise<ResultatRattachement[]> {
+  const signaux = detecterSignaux(ctx, config)
+  if (signaux.length === 0) return []
+
+  const promoPrincipale = ctx.promosApplicables[0]
+  const exclus = typesExclus({
+    statutDisponibilite: ctx.statutDisponibilite,
+    statutCatalogue: ctx.produit.statut_catalogue,
+    statutProduitMagasin: ctx.statutProduitMagasin,
+    promoStade: promoPrincipale ? stadePromo(promoPrincipale, ctx.aujourdHui) : null,
+    constaterDejaActionne: ctx.opportunitesExistantes.some(o => o.type_mission === 'constater_promo' && o.statut === 'reussie'),
+  })
+
+  const signauxRetenus = signaux.filter(s => !exclus.has(s.typeMission))
+  if (signauxRetenus.length === 0) return []
+
+  const groupes = new Map<string, SignalDetecte[]>()
+  for (const s of signauxRetenus) {
+    const cle = cleGroupe(s.typeMission, s.promoId)
+    const liste = groupes.get(cle) ?? []
+    liste.push(s)
+    groupes.set(cle, liste)
+  }
+
+  const resultats: ResultatRattachement[] = []
+  for (const groupeSignaux of groupes.values()) {
+    resultats.push(await rattacherUnGroupe(admin, ctx, groupeSignaux, config, visiteId))
+  }
+  return resultats
+}
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run lib/engine/rattachement.test.ts`
-Expected: PASS (6 tests)
+Expected: PASS (7 tests)
 
 - [ ] **Step 5: Vérifier la compilation**
 
@@ -1894,7 +1953,7 @@ Expected: aucune erreur.
 
 ```bash
 git add lib/engine/rattachement.ts lib/engine/rattachement.test.ts
-git commit -m "feat: orchestrateur du pipeline — rattacherOpportunite"
+git commit -m "feat: orchestrateur du pipeline — rattacherOpportunites (une opportunité par mission distincte)"
 ```
 
 ---
@@ -1909,7 +1968,7 @@ git commit -m "feat: orchestrateur du pipeline — rattacherOpportunite"
 **Décision de portée** : seul `updateStatutProduit` est câblé de façon synchrone dans ce sous-projet — un relevé de statut touche exactement un `(magasin, produit)`, donc c'est bon marché. `importPromos`, `confirmerImportPlanDeVente` et `definirAssortiment` touchent potentiellement des dizaines de magasins d'une même enseigne en un seul appel (import ou modification d'assortiment enseigne-large) ; les y câbler de façon synchrone ralentirait ces actions admin de façon disproportionnée. Ces trois déclencheurs (spec §12.5, lignes « import/modification promo » et « changement d'assortiment ») sont couverts par le filet de sécurité périodique du Task 16, pas ici — décision documentée plutôt que silencieusement omise.
 
 **Interfaces:**
-- Consumes: `rattacherOpportunite` (Task 14), `moteurActif` (Task 3).
+- Consumes: `rattacherOpportunites` (Task 14), `moteurActif` (Task 3).
 - Produces: `executerPipelinePourProduit(admin, magasinId, produitCanoniqueId, visiteId?): Promise<void>` — appelé depuis les Server Actions modifiées.
 
 - [ ] **Step 1: Écrire le test de la fonction d'exécution**
@@ -1943,7 +2002,7 @@ Expected: FAIL — module introuvable.
 // lib/engine/executer-pipeline.ts
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { moteurActif, CONFIG_MOTEUR_DEFAUT } from './config-moteur'
-import { rattacherOpportunite, type ContexteRattachement } from './rattachement'
+import { rattacherOpportunites, type ContexteRattachement } from './rattachement'
 import type { Magasin, Produit, StatutProduit } from '@/lib/types'
 
 // Point d'entrée unique appelé par les Server Actions qui modifient statuts,
@@ -1988,7 +2047,7 @@ export async function executerPipelinePourProduit(
       statutDisponibilite: produitEnseigne?.statut_disponibilite ?? 'commandable',
     }
 
-    await rattacherOpportunite(admin, ctx, CONFIG_MOTEUR_DEFAUT, visiteId)
+    await rattacherOpportunites(admin, ctx, CONFIG_MOTEUR_DEFAUT, visiteId)
   } catch (err) {
     // Shadow mode : le moteur ne doit jamais casser l'action métier qui l'a
     // déclenché. Erreur avalée volontairement, pas de retry ici.
@@ -2221,7 +2280,7 @@ Expected: succès, aucune régression sur les routes existantes.
 
 - [ ] **Step 4: Vérification en base — les 10 scénarios d'acceptation (spec §12.8)**
 
-Écrire et exécuter un script de vérification manuelle (non committé) appelant `rattacherOpportunite` avec des données synthétiques couvrant les 10 scénarios de la spec §12.8, en réutilisant le pattern de script autonome déjà établi dans ce projet (lecture directe de `.env.local`, import des fonctions pures, client admin `@supabase/supabase-js`). Vérifier pour chacun :
+Écrire et exécuter un script de vérification manuelle (non committé) appelant `rattacherOpportunites` avec des données synthétiques couvrant les 10 scénarios de la spec §12.8, en réutilisant le pattern de script autonome déjà établi dans ce projet (lecture directe de `.env.local`, import des fonctions pures, client admin `@supabase/supabase-js`). Vérifier pour chacun :
 
 1. Produit absent + promo future → `referencer_produit` créée, promo en preuve (`opportunite_promos_preuves`).
 2. Revente A + promo B future → `promo_id = A`, B en preuve, jamais confondus.
