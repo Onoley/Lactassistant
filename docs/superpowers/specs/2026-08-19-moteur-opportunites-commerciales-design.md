@@ -321,3 +321,117 @@ Repris de la liste originale de l'utilisateur, filtrés à ce qui est testable d
 4. Aucune régression sur `prioritesSemaine`/`chargerProduitsATravailler` existants — ce sous-projet ajoute un nouveau modèle en parallèle, ne remplace pas encore l'affichage actuel (le remplacement des écrans est un sous-projet suivant, §9).
 5. Les 21 tests testables du §10 passent ; les 3 tests bloqués sont documentés comme tels, pas simulés avec des données inventées.
 6. `raisons_actuelles` valide systématiquement `RaisonsActuellesSchema` avant toute écriture.
+
+## 12. Déploiement et critères d'acceptation
+
+### 12.1 Index
+
+```sql
+-- Requêtes magasin / statut / priorité : couvre les trois par préfixe gauche
+-- (magasin seul, magasin+statut, magasin+statut+niveau).
+create index opportunites_magasin_statut_niveau on opportunites (magasin_id, statut, niveau_priorite);
+-- Requêtes transverses par promo (ex. "toutes les opportunités de cette campagne").
+create index opportunites_promo on opportunites (promo_id) where promo_id is not null;
+-- Chargement de l'historique d'une opportunité, du plus récent au plus ancien.
+create index opportunite_evenements_opportunite_at on opportunite_evenements (opportunite_id, cree_at desc);
+-- Fenêtre de récurrence 60 jours par (magasin, produit canonique).
+create index statuts_historique_recurrence on statuts_produit_magasin_historique (magasin_id, produit_id, signale_at desc);
+```
+
+Les index uniques d'identité (§3.1) et d'idempotence par visite (§3.4) existent déjà et servent aussi de chemin d'accès rapide pour le rattachement — pas de doublon à créer.
+
+### 12.2 RLS admin/commercial
+
+Même idiome que `statuts_produit_magasin`/`visites` (fonction `visible_secteurs()` déjà en place) :
+
+```sql
+alter table opportunites enable row level security;
+create policy "opportunites_select_visible" on opportunites for select
+  using (magasin_id in (select id from magasins where secteur_id in (select visible_secteurs())));
+create policy "opportunites_write_own_secteur" on opportunites for all
+  using (
+    (select role from current_profile()) = 'admin'
+    or ((select role from current_profile()) = 'commercial'
+        and magasin_id in (select id from magasins where secteur_id = (select secteur_id from current_profile())))
+  );
+
+alter table opportunite_evenements enable row level security;
+create policy "opportunite_evenements_select_visible" on opportunite_evenements for select
+  using (opportunite_id in (
+    select id from opportunites where magasin_id in (select id from magasins where secteur_id in (select visible_secteurs()))
+  ));
+create policy "opportunite_evenements_insert_own_secteur" on opportunite_evenements for insert
+  with check (
+    (select role from current_profile()) = 'admin'
+    or ((select role from current_profile()) = 'commercial'
+        and opportunite_id in (
+          select id from opportunites where magasin_id in (select id from magasins where secteur_id = (select secteur_id from current_profile()))
+        ))
+  );
+-- Append-only : aucune policy update/delete, comme pour statuts_produit_magasin_historique ci-dessous.
+
+alter table opportunite_promos_preuves enable row level security;
+create policy "opportunite_promos_preuves_select_visible" on opportunite_promos_preuves for select
+  using (opportunite_id in (
+    select id from opportunites where magasin_id in (select id from magasins where secteur_id in (select visible_secteurs()))
+  ));
+create policy "opportunite_promos_preuves_admin_write" on opportunite_promos_preuves for all
+  using ((select role from current_profile()) = 'admin');
+
+alter table statuts_produit_magasin_historique enable row level security;
+create policy "statuts_historique_select_visible" on statuts_produit_magasin_historique for select
+  using (magasin_id in (select id from magasins where secteur_id in (select visible_secteurs())));
+create policy "statuts_historique_insert_own_secteur" on statuts_produit_magasin_historique for insert
+  with check (
+    (select role from current_profile()) = 'admin'
+    or ((select role from current_profile()) = 'commercial'
+        and magasin_id in (select id from magasins where secteur_id = (select secteur_id from current_profile())))
+  );
+```
+
+Le pipeline (calcul de `niveau_priorite`/`score`/`confiance`/`raisons_actuelles`) tourne toujours via le client admin (bypass RLS), comme `confirmerImportPlanDeVente`. Une transition de statut initiée par un commercial (accord obtenu, refus...) passe par le client authentifié normal, gatée par `opportunites_write_own_secteur` — comme pour `statuts_produit_magasin`, RLS gate au niveau ligne ; la discipline « le commercial ne touche jamais `niveau_priorite`/`score`/`confiance`/`raisons_actuelles` » reste une garantie applicative (le Server Action n'envoie jamais ces colonnes), cohérente avec le reste du schéma qui ne fait nulle part de restriction colonne par colonne.
+
+### 12.3 Migration des données existantes
+
+`statuts_produit_magasin_historique` démarre avec **exactement une ligne par ligne existante** de `statuts_produit_magasin` (son `statut`/`raison_absence`/`signale_at` actuels, `visite_id = null` car l'origine n'est pas connue rétroactivement). Jamais plusieurs lignes synthétiques pour un même produit — un seul relevé initial ne peut par construction jamais déclencher le seuil de récurrence (≥2, §4.2), donc aucune fausse récurrence n'est introduite par la migration.
+
+`opportunites` démarre **vide**. Aucune reconstruction rétroactive d'opportunités à partir de l'historique des promos/statuts passés — la première exécution du pipeline (§4) génère uniquement des opportunités depuis l'état courant et les données datées à venir, jamais depuis des événements déjà clos dans le passé.
+
+### 12.4 Idempotence et transactions
+
+Déjà spécifié au niveau mécanisme (§4.7, fonction Postgres transactionnelle unique). Rappel comme exigence de déploiement : la création, le recalcul et la réouverture passent **toujours** par cette même fonction — aucun code applicatif n'écrit directement dans `opportunites`/`opportunite_evenements`/`opportunite_promos_preuves` en dehors d'elle. Vérifié par le scénario d'acceptation 8 (§12.8).
+
+### 12.5 Événements déclenchant le moteur
+
+| Déclencheur | Origine |
+|---|---|
+| Nouveau relevé de statut | `updateStatutProduit`, après son écriture dans `statuts_produit_magasin_historique` (§8) — relance le pipeline pour ce `(magasin, produit_canonique)` |
+| Import ou modification d'une promo | `importPromos` (existant) et toute future action d'édition de promo — relance pour les `(magasin, produit)` liés via `promo_produits` |
+| Changement d'assortiment | `confirmerImportPlanDeVente`, `definirAssortiment` (existants) — relance pour les produits concernés |
+| Engagement arrivé à échéance | déclenchement par le calendrier, pas par une action utilisateur — nécessite un balayage périodique des `opportunites` où `prochaine_action_at <= aujourd'hui` |
+| Recalcul planifié | filet de sécurité périodique (fenêtres promo qui s'ouvrent sans écriture associée, VMH mis à jour en masse) |
+
+Les deux derniers déclencheurs sont **temporels**, pas déclenchés par une action applicative — ce projet n'a aujourd'hui aucun mécanisme de tâche planifiée. Une décision d'infrastructure (Supabase Edge Function planifiée, ou équivalent) est nécessaire et sera actée dans le plan d'implémentation, pas dans cette spec.
+
+### 12.6 Déploiement initial en shadow mode
+
+Conséquence directe du périmètre déjà fixé (§9) : ce sous-projet ne touche aucun écran existant. `/magasins/[id]`, `/semaine`, `/equipe` continuent de s'appuyer sur `prioritesSemaine`/`chargerProduitsATravailler` sans changement. Le moteur calcule et persiste dans `opportunites` en parallèle, invisible pour le commercial.
+
+Exigence de comparaison avant activation : une requête (vue SQL en lecture seule, ou page admin minimale — forme exacte laissée au plan) permettant de rapprocher, par magasin, la sortie actuelle de `prioritesSemaine`/`chargerProduitsATravailler` et celle du nouveau moteur (`opportunites` filtrées `niveau_priorite is not null`), pour valider la cohérence avant de basculer un quelconque écran dessus.
+
+### 12.7 Désactivation sans perte d'historique
+
+Un indicateur de configuration (ex. table de config existante ou nouvelle, à trancher dans le plan) gate l'exécution du pipeline. Désactivé : aucune nouvelle écriture dans les 4 tables, mais rien n'est supprimé — `opportunites`/`opportunite_evenements`/`opportunite_promos_preuves`/`statuts_produit_magasin_historique` restent intégralement lisibles et interrogeables.
+
+### 12.8 Scénarios d'acceptation
+
+1. **Produit absent + promotion future** : une opportunité structurelle `referencer_produit` est créée (`promo_id = null`), la promotion apparaît comme preuve dans `opportunite_promos_preuves` — jamais comme identité de l'opportunité.
+2. **Revente promo A + promo B future** : l'opportunité `revendre_promo` a `promo_id = A` ; B apparaît dans `opportunite_promos_preuves` comme argument complémentaire, jamais confondue avec A dans l'interface future.
+3. **Deux saisies de rupture pendant la même visite** : une seule ligne dans `statuts_produit_magasin_historique` (idempotence `(magasin_id, produit_id, visite_id)`, §3.4) — une seule observation comptée pour la récurrence.
+4. **Deux ruptures sur deux visites distinctes en 60 jours** : deux lignes distinctes dans l'historique → seuil de récurrence atteint (≥2, §4.2) → signal de rupture récurrente détecté.
+5. **Refus récent sans nouvelle preuve** : l'opportunité reste `refusee`, aucune relance générée, aucune écriture (§5, §4.7 dernier cas).
+6. **Refus récent + nouvelle promotion dans sa fenêtre d'action** : réouverture — `cycle += 1`, `statut → 'detectee'`, événement `reouverture`, score pénalisé de −25, niveau P1/P2/P3 non affecté par la pénalité.
+7. **Une pénalité modifie le classement dans P1** (score, pour départager plusieurs P1 entre eux) **mais ne transforme jamais P1 en P2** — le niveau est fixé avant le score et n'est jamais recalculé à partir de lui (§4, §7).
+8. **Deux exécutions identiques du moteur** : fingerprint inchangé → aucune écriture, aucun doublon, aucun événement `recalcul_score` (§4.7, §10.14).
+9. **Données contradictoires** : une opportunité `verifier_information` distincte est créée ; l'opportunité d'origine n'est jamais reconvertie, sa confiance passe à `information_a_verifier` (§4.6).
+10. **Produit déjà présent** : `referencer_produit` est exclu ; `revendre_promo`, `constater_promo`, `securiser_commande` et `optimiser_implantation` restent tous possibles (§4.1).
