@@ -1,4 +1,5 @@
-import type { Magasin, Produit, Promo, Opportunite, StatutProduit, StatutProduitMagasinHistorique } from '@/lib/types'
+import type { Magasin, Produit, Promo, Opportunite, StatutProduit, StatutProduitMagasinHistorique, TypeMission } from '@/lib/types'
+import { TYPES_MISSION_PROMO } from '@/lib/types'
 import { stadePromo } from './stade-promo'
 import { compterRupturesRecurrentes } from './historique-ruptures'
 import type { ConfigMoteur } from './config-moteur'
@@ -58,9 +59,10 @@ export function detecterSignaux(ctx: ContexteDetection, config: ConfigMoteur): S
     }
 
     if (promo.op_trade) {
+      const typeMissionOpTrade: TypeMission = stade === 'constater' ? 'constater_promo' : stade === 'controler' || stade === 'revendre' ? 'securiser_commande' : 'anticiper_promo'
       signaux.push({
-        typeMission: stade === 'constater' ? 'constater_promo' : stade === 'controler' || stade === 'revendre' ? 'securiser_commande' : 'anticiper_promo',
-        promoId: stade === 'anticiper' || stade === 'revendre' || stade === 'constater' ? promo.id : null,
+        typeMission: typeMissionOpTrade,
+        promoId: TYPES_MISSION_PROMO.includes(typeMissionOpTrade) ? promo.id : null,
         niveauDeclenche: 'P1', codeSignal: 'ope_trade', sourceType: 'promo', sourceId: promo.id,
         observedAt: ctx.aujourdHui.toISOString(), expiresAt: promo.date_debut_vente, force: 40,
         donneesArgumentaire: { mecanique: promo.mecanique, opTrade: promo.op_trade },
@@ -73,7 +75,7 @@ export function detecterSignaux(ctx: ContexteDetection, config: ConfigMoteur): S
       const echu = new Date(opp.prochaine_action_at) <= ctx.aujourdHui
       if (echu) {
         signaux.push({
-          typeMission: 'suivre_engagement', promoId: opp.promo_id, niveauDeclenche: 'P1',
+          typeMission: 'suivre_engagement', promoId: null, niveauDeclenche: 'P1',
           codeSignal: 'engagement_echu', sourceType: 'engagement', sourceId: opp.id,
           observedAt: ctx.aujourdHui.toISOString(), expiresAt: null, force: 35,
           donneesArgumentaire: { prochaineActionAt: opp.prochaine_action_at, statutPrecedent: opp.statut },

@@ -75,4 +75,25 @@ describe('detecterSignaux', () => {
     const signaux = detecterSignaux(ctx({ promosApplicables: [promo({ date_debut_vente: '2026-10-01', op_trade: 'oui' })] }), CONFIG_MOTEUR_DEFAUT)
     expect(signaux.some(s => s.codeSignal === 'ope_trade' && s.niveauDeclenche === 'P1')).toBe(true)
   })
+
+  it('ope_trade au stade revendre produit securiser_commande avec promoId null (type structurel)', () => {
+    const signaux = detecterSignaux(ctx({ promosApplicables: [promo({ date_installation: '2026-08-01', date_debut_vente: '2026-09-01', op_trade: 'oui' })] }), CONFIG_MOTEUR_DEFAUT)
+    const signal = signaux.find(s => s.codeSignal === 'ope_trade')
+    expect(signal).toBeDefined()
+    expect(signal!.typeMission).toBe('securiser_commande')
+    expect(signal!.promoId).toBeNull()
+  })
+
+  it('engagement échu sur une opportunité promo n\'hérite pas du promo_id (suivre_engagement est structurel)', () => {
+    const opp: Opportunite = {
+      id: 'o1', magasin_id: 'm1', produit_canonique_id: 'p1', type_mission: 'revendre_promo', promo_id: 'promoX',
+      statut: 'accord_obtenu', niveau_priorite: 'P1', score: 80, confiance: 'donnees_confirmees', raisons_actuelles: null,
+      score_calcule_at: null, fingerprint: null, version_moteur: null, cycle: 1, derniere_reouverture_at: null,
+      cree_at: '2026-08-01', cloture_at: null, prochaine_action_at: '2026-08-15',
+    }
+    const signaux = detecterSignaux(ctx({ opportunitesExistantes: [opp] }), CONFIG_MOTEUR_DEFAUT)
+    const signal = signaux.find(s => s.typeMission === 'suivre_engagement')
+    expect(signal).toBeDefined()
+    expect(signal!.promoId).toBeNull()
+  })
 })
