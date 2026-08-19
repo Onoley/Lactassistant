@@ -3,7 +3,12 @@ import { revalidatePath } from 'next/cache'
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
 import type { RaisonAbsence, StatutProduit } from '@/lib/types'
 
-export async function updateStatutProduit(magasinId: string, produitId: string, statut: StatutProduit) {
+export async function updateStatutProduit(
+  magasinId: string,
+  produitId: string,
+  statut: StatutProduit,
+  visiteId: string | null = null
+) {
   const supabase = createServerClient()
   const profile = await getCurrentProfile(supabase)
   if (!profile) throw new Error('Non authentifié')
@@ -16,6 +21,23 @@ export async function updateStatutProduit(magasinId: string, produitId: string, 
     { onConflict: 'magasin_id,produit_id' }
   )
   if (error) throw error
+
+  // Historique append-only, idempotent par visite (spec §3.4, §8) — plusieurs
+  // clics pendant la même visite mettent à jour la même ligne au lieu d'en
+  // empiler plusieurs.
+  if (visiteId) {
+    const { error: histError } = await supabase.from('statuts_produit_magasin_historique').upsert(
+      { magasin_id: magasinId, produit_id: idEffectif, statut, visite_id: visiteId, signale_par: profile.id, signale_at: new Date().toISOString() },
+      { onConflict: 'magasin_id,produit_id,visite_id' }
+    )
+    if (histError) throw histError
+  } else {
+    const { error: histError } = await supabase.from('statuts_produit_magasin_historique').insert(
+      { magasin_id: magasinId, produit_id: idEffectif, statut, signale_par: profile.id, signale_at: new Date().toISOString() }
+    )
+    if (histError) throw histError
+  }
+
   revalidatePath(`/magasins/${magasinId}`)
 }
 
