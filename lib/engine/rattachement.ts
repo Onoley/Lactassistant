@@ -7,7 +7,6 @@ import { calculerScoreOpportunite } from './scoring'
 import { determinerConfiance } from './confiance'
 import { calculerFingerprint } from './fingerprint'
 import { RaisonsActuellesSchema, type RaisonsActuelles } from './raison'
-import { stadePromo } from './stade-promo'
 import type { ConfigMoteur } from './config-moteur'
 import type { SignalDetecte, SourceSignal } from './signal'
 
@@ -128,16 +127,30 @@ export async function rattacherOpportunites(
   const signaux = detecterSignaux(ctx, config)
   if (signaux.length === 0) return []
 
-  const promoPrincipale = ctx.promosApplicables[0]
-  const exclus = typesExclus({
+  // typesExclus n'est promo-dépendante que pour la règle constater_promo — on
+  // la neutralise ici (promoStade: null) et on l'applique nous-mêmes plus bas,
+  // par signal et scopée à la promo de CE signal. Sinon, avec 2+ promos
+  // applicables (cas fréquent, pas un edge case), ctx.promosApplicables[0]
+  // est un choix arbitraire : une promo A déjà constatée/réussie pouvait
+  // supprimer constater_promo pour une promo B active et différente.
+  const exclusGeneriques = typesExclus({
     statutDisponibilite: ctx.statutDisponibilite,
     statutCatalogue: ctx.produit.statut_catalogue,
     statutProduitMagasin: ctx.statutProduitMagasin,
-    promoStade: promoPrincipale ? stadePromo(promoPrincipale, ctx.aujourdHui) : null,
-    constaterDejaActionne: ctx.opportunitesExistantes.some(o => o.type_mission === 'constater_promo' && o.statut === 'reussie'),
+    promoStade: null,
+    constaterDejaActionne: false,
   })
 
-  const signauxRetenus = signaux.filter(s => !exclus.has(s.typeMission))
+  const signauxRetenus = signaux.filter(s => {
+    if (exclusGeneriques.has(s.typeMission)) return false
+    if (s.typeMission === 'constater_promo' && s.promoId) {
+      const dejaActionnee = ctx.opportunitesExistantes.some(
+        o => o.type_mission === 'constater_promo' && o.promo_id === s.promoId && o.statut === 'reussie'
+      )
+      if (dejaActionnee) return false
+    }
+    return true
+  })
   if (signauxRetenus.length === 0) return []
 
   const groupes = new Map<string, SignalDetecte[]>()

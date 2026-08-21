@@ -16,17 +16,23 @@ export async function executerPipelinePourProduit(
   if (!moteurActif()) return
 
   try {
-    const [{ data: magasin }, { data: produit }, { data: statuts }, { data: produitsEnseigne }, { data: promoLiens }, { data: opportunites }, { data: priorite }, { data: historique }] = await Promise.all([
+    const [{ data: magasin }, { data: produit }, { data: statuts }, { data: produitsEnseigne }, { data: variantes }, { data: opportunites }, { data: priorite }, { data: historique }] = await Promise.all([
       admin.from('magasins').select('*').eq('id', magasinId).single(),
       admin.from('produits').select('*').eq('id', produitCanoniqueId).single(),
       admin.from('statuts_produit_magasin').select('*').eq('magasin_id', magasinId).eq('produit_id', produitCanoniqueId).maybeSingle(),
       admin.from('produits_enseigne').select('*').eq('produit_id', produitCanoniqueId),
-      admin.from('promo_produits').select('promo_id, promos(*)').eq('produit_id', produitCanoniqueId),
+      // promo_produits.produit_id pointe souvent sur un EAN-variante plutôt
+      // que sur l'id canonique (21,7% des lignes live) — il faut chercher les
+      // promos liées à l'id canonique ET à toutes ses variantes.
+      admin.from('produits').select('id').eq('produit_canonique_id', produitCanoniqueId),
       admin.from('opportunites').select('*').eq('magasin_id', magasinId).eq('produit_canonique_id', produitCanoniqueId),
       admin.from('priorites_produits').select('rang').eq('produit_id', produitCanoniqueId).maybeSingle(),
       admin.from('statuts_produit_magasin_historique').select('*').eq('magasin_id', magasinId).eq('produit_id', produitCanoniqueId),
     ])
     if (!magasin || !produit) return
+
+    const idsRecherchePromo = [produitCanoniqueId, ...(variantes ?? []).map((v: { id: string }) => v.id)]
+    const { data: promoLiens } = await admin.from('promo_produits').select('promo_id, promos(*)').in('produit_id', idsRecherchePromo)
 
     const produitEnseigne = (produitsEnseigne ?? []).find((pe: { enseigne: string }) => pe.enseigne === magasin.enseigne)
     const promosApplicables = (promoLiens ?? [])

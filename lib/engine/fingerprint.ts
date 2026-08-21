@@ -17,7 +17,7 @@ export function calculerFingerprint(resultat: ResultatMoteur): string {
     confiance: resultat.confiance,
     raisons: (resultat.raisons?.raisons ?? [])
       .map(r => ({ code: r.codeSignal, source: { type: r.source.type, id: r.source.id }, contribution: r.contributionScore, niveau: r.niveauDeclenche }))
-      .sort((a, b) => a.code.localeCompare(b.code)),
+      .sort((a, b) => a.code.localeCompare(b.code) || a.source.id.localeCompare(b.source.id)),
     statut: resultat.statut,
   }
   return createHash('sha256').update(JSON.stringify(canonique)).digest('hex')

@@ -78,4 +78,35 @@ describe('rattacherOpportunites', () => {
     const typesAppeles = rpc.mock.calls.map(c => (c[1] as { p_type_mission: string }).p_type_mission).sort()
     expect(typesAppeles).toEqual(['revendre_promo', 'suivre_engagement'])
   })
+
+  it('une promo A déjà constatée/réussie ne doit pas supprimer constater_promo pour une promo B active et différente (contamination croisée)', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: { id: 'o1', statut: 'detectee' }, error: null })
+    const admin = { rpc } as unknown as Parameters<typeof rattacherOpportunites>[0]
+
+    // Promo A : au stade "constater" (date_constat passée), déjà actionnée
+    // (opportunité constater_promo/reussie existante pour promoA).
+    const promoA: Promo = { id: 'promoA', code: 'PA', enseigne: 'Carrefour', mecanique: 'ODR', date_installation: '2026-07-01', date_debut_vente: '2026-07-10', date_constat: '2026-08-01', date_fin_vente: '2026-08-10', op_trade: null }
+    // Promo B : distincte, également au stade "constater", jamais actionnée.
+    const promoB: Promo = { id: 'promoB', code: 'PB', enseigne: 'Carrefour', mecanique: 'ODR', date_installation: '2026-07-01', date_debut_vente: '2026-07-10', date_constat: '2026-08-01', date_fin_vente: '2026-08-10', op_trade: null }
+
+    const oppConstateeA: Opportunite = {
+      id: 'oA', magasin_id: 'm1', produit_canonique_id: 'p1', type_mission: 'constater_promo', promo_id: 'promoA',
+      statut: 'reussie', niveau_priorite: 'P1', score: 40, confiance: 'donnees_confirmees', raisons_actuelles: null,
+      score_calcule_at: null, fingerprint: null, version_moteur: null, cycle: 1, derniere_reouverture_at: null,
+      cree_at: '2026-08-01', cloture_at: '2026-08-02', prochaine_action_at: null,
+    }
+
+    const resultats = await rattacherOpportunites(admin, ctxVide({
+      statutProduitMagasin: 'present',
+      promosApplicables: [promoA, promoB],
+      opportunitesExistantes: [oppConstateeA],
+      aujourdHui: new Date('2026-08-15'),
+    }) as never, CONFIG_MOTEUR_DEFAUT, null)
+
+    // promoA doit rester exclue (déjà actionnée), promoB doit passer.
+    const promoIdsAppeles = rpc.mock.calls.map(c => (c[1] as { p_promo_id: string | null }).p_promo_id)
+    expect(promoIdsAppeles).toContain('promoB')
+    expect(promoIdsAppeles).not.toContain('promoA')
+    expect(resultats.length).toBe(1)
+  })
 })
