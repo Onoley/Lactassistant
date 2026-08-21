@@ -1,6 +1,8 @@
 'use server'
 import { revalidatePath } from 'next/cache'
 import { createServerClient, getCurrentProfile } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { executerPipelinePourProduit } from '@/lib/engine/executer-pipeline'
 import type { RaisonAbsence, StatutProduit } from '@/lib/types'
 
 export async function updateStatutProduit(
@@ -37,6 +39,10 @@ export async function updateStatutProduit(
     )
     if (histError) throw histError
   }
+
+  // Déclencheur synchrone du moteur d'opportunités (Task 15, spec §12.5) :
+  // best-effort, ne doit jamais faire échouer ce relevé de statut.
+  await executerPipelinePourProduit(createAdminClient(), magasinId, idEffectif, visiteId)
 
   revalidatePath(`/magasins/${magasinId}`)
 }

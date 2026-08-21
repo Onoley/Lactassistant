@@ -28,6 +28,8 @@ vi.mock('@/lib/supabase/server', () => ({
   getCurrentProfile: async () => ({ id: 'commercial-1' }),
 }))
 vi.mock('next/cache', () => ({ revalidatePath: () => {} }))
+vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({}) }))
+vi.mock('@/lib/engine/executer-pipeline', () => ({ executerPipelinePourProduit: vi.fn(async () => {}) }))
 
 import { updateStatutProduit } from './actions'
 
