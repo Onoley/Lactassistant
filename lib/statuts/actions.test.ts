@@ -32,6 +32,7 @@ vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => ({}) }))
 vi.mock('@/lib/engine/executer-pipeline', () => ({ executerPipelinePourProduit: vi.fn(async () => {}) }))
 
 import { updateStatutProduit } from './actions'
+import { executerPipelinePourProduit } from '@/lib/engine/executer-pipeline'
 
 describe('updateStatutProduit — historique', () => {
   it('upsert sur (magasin,produit,visite) quand une visite est fournie', async () => {
@@ -60,5 +61,42 @@ describe('updateStatutProduit — historique', () => {
     } finally {
       delete canoniqueByProduit.p1
     }
+  })
+})
+
+describe('updateStatutProduit — pipeline d\'opportunités', () => {
+  it('appelle executerPipelinePourProduit avec le produit canonique résolu et la visite', async () => {
+    vi.clearAllMocks()
+    canoniqueByProduit.p1 = 'canon-1'
+    try {
+      await updateStatutProduit('m1', 'p1', 'rupture', 'v1')
+      expect(executerPipelinePourProduit).toHaveBeenCalledOnce()
+      const calls = (executerPipelinePourProduit as any).mock.calls
+      expect(calls[0][1]).toBe('m1') // magasinId
+      expect(calls[0][2]).toBe('canon-1') // idEffectif (produit canonique)
+      expect(calls[0][3]).toBe('v1') // visiteId
+    } finally {
+      delete canoniqueByProduit.p1
+    }
+  })
+
+  it('appelle executerPipelinePourProduit avec le produit id quand pas de canonique', async () => {
+    vi.clearAllMocks()
+    await updateStatutProduit('m2', 'p2', 'rupture', 'v2')
+    expect(executerPipelinePourProduit).toHaveBeenCalledOnce()
+    const calls = (executerPipelinePourProduit as any).mock.calls
+    expect(calls[0][1]).toBe('m2') // magasinId
+    expect(calls[0][2]).toBe('p2') // idEffectif (pas de canonique, donc p2)
+    expect(calls[0][3]).toBe('v2') // visiteId
+  })
+
+  it('appelle executerPipelinePourProduit même quand pas de visite', async () => {
+    vi.clearAllMocks()
+    await updateStatutProduit('m3', 'p3', 'rupture')
+    expect(executerPipelinePourProduit).toHaveBeenCalledOnce()
+    const calls = (executerPipelinePourProduit as any).mock.calls
+    expect(calls[0][1]).toBe('m3') // magasinId
+    expect(calls[0][2]).toBe('p3') // idEffectif
+    expect(calls[0][3]).toBeNull() // visiteId
   })
 })
